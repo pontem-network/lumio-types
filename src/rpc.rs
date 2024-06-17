@@ -57,3 +57,10 @@ pub struct L2Info {
     /// L2 version. slot on solana or ledger version on aptos.
     pub l2_version: Version,
 }
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
+pub enum SyncMode {
+    Normal,
+    #[default]
+    Sync,
+}
