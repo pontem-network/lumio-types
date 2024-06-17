@@ -64,3 +64,42 @@ pub enum SyncMode {
     #[default]
     Sync,
 }
+
+#[cfg(test)]
+mod test {
+    use rand::random;
+
+    use crate::{rpc::Payload, Address, Hash};
+
+    #[test]
+    fn test_serde_tx_mint() {
+        let tx = super::TxMint {
+            account: Address::from(random::<[u8;32]>()),
+            amount: 100,
+        };
+        let encoded_tx = serde_json::to_string(&tx).unwrap();
+        let decoded_tx: super::TxMint = serde_json::from_str(&encoded_tx).unwrap();
+        assert_eq!(tx, decoded_tx);
+    }
+
+    #[test]
+    fn test_serde_payload() {
+        let tx = Payload {
+            parent_payload: 1,
+            slots: vec![super::SlotPayload {
+                slot: 1,
+                previous_blockhash: Hash::from(random::<[u8;32]>()),
+                blockhash:  Hash::from(random::<[u8;32]>()),
+                block_time: None,
+                block_height: None,
+                txs: vec![10],
+                bank_hash:  Hash::from(random::<[u8;32]>()),
+            }],
+            checkpoint:  Hash::from(random::<[u8;32]>()),
+            id: 2,
+        };
+        let encoded_tx = serde_json::to_string(&tx).unwrap();
+        let decoded_tx: Payload<i32> = serde_json::from_str(&encoded_tx).unwrap();
+        assert_eq!(tx, decoded_tx);
+    }
+}
