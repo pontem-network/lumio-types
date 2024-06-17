@@ -74,7 +74,7 @@ mod test {
     #[test]
     fn test_serde_tx_mint() {
         let tx = super::TxMint {
-            account: Address::from(random::<[u8;32]>()),
+            account: Address::from(random::<[u8; 32]>()),
             amount: 100,
         };
         let encoded_tx = serde_json::to_string(&tx).unwrap();
@@ -88,14 +88,14 @@ mod test {
             parent_payload: 1,
             slots: vec![super::SlotPayload {
                 slot: 1,
-                previous_blockhash: Hash::from(random::<[u8;32]>()),
-                blockhash:  Hash::from(random::<[u8;32]>()),
+                previous_blockhash: Hash::from(random::<[u8; 32]>()),
+                blockhash: Hash::from(random::<[u8; 32]>()),
                 block_time: None,
                 block_height: None,
                 txs: vec![10],
-                bank_hash:  Hash::from(random::<[u8;32]>()),
+                bank_hash: Hash::from(random::<[u8; 32]>()),
             }],
-            checkpoint:  Hash::from(random::<[u8;32]>()),
+            checkpoint: Hash::from(random::<[u8; 32]>()),
             id: 2,
         };
         let encoded_tx = serde_json::to_string(&tx).unwrap();
