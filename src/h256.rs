@@ -6,7 +6,7 @@ use std::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, PartialEq, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, PartialEq, BorshSerialize, BorshDeserialize, Default)]
 pub struct H256([u8; 32]);
 
 impl From<[u8; 32]> for H256 {
