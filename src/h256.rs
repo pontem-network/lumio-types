@@ -39,6 +39,12 @@ impl From<H256> for [u8; 32] {
     }
 }
 
+impl H256 {
+    pub fn inner(&self) -> [u8; 32] {
+        self.0
+    }
+}
+
 impl FromStr for H256 {
     type Err = hex::FromHexError;
 
