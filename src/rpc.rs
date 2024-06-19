@@ -1,6 +1,7 @@
 use crate::{Address, Hash, PayloadId, Slot, UnixTimestamp, Version};
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
+use sha3::Digest;
 use std::fmt::Debug;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -30,6 +31,18 @@ where
     pub parent_payload: PayloadId,
     pub slots: Vec<SlotPayload<T>>,
     pub checkpoint: Hash,
+}
+
+impl<T> Payload<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq,
+{
+    pub fn hash(&self) -> Hash {
+        let serialized = borsh::to_vec(self).expect("Never fails");
+        let digest = sha3::Sha3_256::digest(serialized);
+
+        Hash::from(<[u8; 32]>::try_from(&digest[..]).expect("Never fails"))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
