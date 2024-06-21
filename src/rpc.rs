@@ -3,6 +3,28 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use sha3::Digest;
 use std::fmt::Debug;
+use jsonrpsee::{proc_macros::rpc, types::ErrorObjectOwned};
+
+#[rpc(server, client, namespace = "engine")]
+pub trait L2EngineApi<TX>
+where
+    TX: borsh::BorshSerialize + borsh::BorshDeserialize + std::fmt::Debug + PartialEq + Clone,
+{
+    #[method(name = "l2Info_v1")]
+    async fn l2_info(&self) -> Result<L2Info, ErrorObjectOwned>;
+
+    #[method(name = "applyAttributes_v1")]
+    async fn apply_attributes(
+        &self,
+        attrs: PayloadAttrs,
+    ) -> Result<Option<Payload<TX>>, ErrorObjectOwned>;
+
+    #[method(name = "applyPayload_v1")]
+    async fn apply_payload(&self, payload: Payload<TX>) -> Result<(), ErrorObjectOwned>;
+
+    #[method(name = "setSyncMode_v1")]
+    async fn set_sync_mode(&self, sync_mode: SyncMode) -> Result<(), ErrorObjectOwned>;
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TxMint {
