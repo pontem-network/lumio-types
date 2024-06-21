@@ -1,3 +1,5 @@
+#![warn(unused_crate_dependencies)]
+
 pub mod h256;
 pub mod rpc;
 
