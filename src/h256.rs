@@ -4,16 +4,11 @@ use std::{
 };
 
 use borsh::{BorshDeserialize, BorshSerialize};
+use derive_more::{AsRef, From, Into};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, PartialEq, BorshSerialize, BorshDeserialize, Default)]
-pub struct H256([u8; 32]);
-
-impl From<[u8; 32]> for H256 {
-    fn from(bytes: [u8; 32]) -> Self {
-        H256(bytes)
-    }
-}
+#[derive(Clone, PartialEq, BorshSerialize, BorshDeserialize, Default, From, Into, AsRef)]
+pub struct H256(pub [u8; 32]);
 
 impl Display for H256 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -24,18 +19,6 @@ impl Display for H256 {
 impl Debug for H256 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", hex::encode(self.0))
-    }
-}
-
-impl AsRef<[u8]> for H256 {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl From<H256> for [u8; 32] {
-    fn from(h: H256) -> [u8; 32] {
-        h.0
     }
 }
 
