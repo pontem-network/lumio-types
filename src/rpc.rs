@@ -1,12 +1,12 @@
 use crate::{Address, Hash, PayloadId, Slot, UnixTimestamp, Version};
 use borsh::{BorshDeserialize, BorshSerialize};
+use jsonrpsee::{proc_macros::rpc, types::ErrorObjectOwned};
 use serde::{Deserialize, Serialize};
 use sha3::Digest;
 use std::fmt::Debug;
-use jsonrpsee::{proc_macros::rpc, types::ErrorObjectOwned};
 
 #[rpc(server, client, namespace = "engine")]
-pub trait L2EngineApi<TX> {
+pub trait L2EngineApi<TXS> {
     #[method(name = "l2Info_v1")]
     async fn l2_info(&self) -> Result<L2Info, ErrorObjectOwned>;
 
@@ -14,10 +14,10 @@ pub trait L2EngineApi<TX> {
     async fn apply_attributes(
         &self,
         attrs: PayloadAttrs,
-    ) -> Result<Option<Payload<TX>>, ErrorObjectOwned>;
+    ) -> Result<Option<Payload<TXS>>, ErrorObjectOwned>;
 
     #[method(name = "applyPayload_v1")]
-    async fn apply_payload(&self, payload: Payload<TX>) -> Result<(), ErrorObjectOwned>;
+    async fn apply_payload(&self, payload: Payload<TXS>) -> Result<(), ErrorObjectOwned>;
 
     #[method(name = "setSyncMode_v1")]
     async fn set_sync_mode(&self, sync_mode: SyncMode) -> Result<(), ErrorObjectOwned>;
@@ -42,14 +42,14 @@ pub struct L1Slot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub struct Payload<T> {
+pub struct Payload<TXS> {
     pub id: PayloadId,
     pub parent_payload: PayloadId,
-    pub slots: Vec<SlotPayload<T>>,
+    pub slots: Vec<SlotPayload<TXS>>,
     pub checkpoint: Hash,
 }
 
-impl<T: BorshSerialize> Payload<T> {
+impl<TXS: BorshSerialize> Payload<TXS> {
     pub fn hash(&self) -> Hash {
         let serialized = borsh::to_vec(self).expect("Never fails");
         let digest = sha3::Sha3_256::digest(serialized);
@@ -59,13 +59,13 @@ impl<T: BorshSerialize> Payload<T> {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub struct SlotPayload<T> {
+pub struct SlotPayload<TXS> {
     pub slot: Slot,
     pub previous_blockhash: Hash,
     pub blockhash: Hash,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
-    pub txs: Vec<T>,
+    pub txs: TXS,
     pub bank_hash: Hash,
 }
 
@@ -115,7 +115,7 @@ mod test {
                 blockhash: Hash::from(random::<[u8; 32]>()),
                 block_time: None,
                 block_height: None,
-                txs: vec![10],
+                txs: 10,
                 bank_hash: Hash::from(random::<[u8; 32]>()),
             }],
             checkpoint: Hash::from(random::<[u8; 32]>()),
