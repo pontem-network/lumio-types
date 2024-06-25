@@ -6,7 +6,7 @@ use sha3::Digest;
 use std::fmt::Debug;
 
 #[rpc(server, client, namespace = "engine")]
-pub trait L2EngineApi<TXS> {
+pub trait L2EngineApi<Payload> {
     #[method(name = "l2Info_v1")]
     async fn l2_info(&self) -> Result<L2Info, ErrorObjectOwned>;
 
@@ -14,10 +14,10 @@ pub trait L2EngineApi<TXS> {
     async fn apply_attributes(
         &self,
         attrs: PayloadAttrs,
-    ) -> Result<Option<Payload<TXS>>, ErrorObjectOwned>;
+    ) -> Result<Option<Payload>, ErrorObjectOwned>;
 
     #[method(name = "applyPayload_v1")]
-    async fn apply_payload(&self, payload: Payload<TXS>) -> Result<(), ErrorObjectOwned>;
+    async fn apply_payload(&self, payload: Payload) -> Result<(), ErrorObjectOwned>;
 
     #[method(name = "setSyncMode_v1")]
     async fn set_sync_mode(&self, sync_mode: SyncMode) -> Result<(), ErrorObjectOwned>;
@@ -42,14 +42,14 @@ pub struct L1Slot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub struct Payload<TXS> {
+pub struct Payload<TX> {
     pub id: PayloadId,
     pub parent_payload: PayloadId,
-    pub slots: Vec<SlotPayload<TXS>>,
+    pub slots: Vec<SlotPayload<TX>>,
     pub checkpoint: Hash,
 }
 
-impl<TXS: BorshSerialize> Payload<TXS> {
+impl<TX: BorshSerialize> Payload<TX> {
     pub fn hash(&self) -> Hash {
         let serialized = borsh::to_vec(self).expect("Never fails");
         let digest = sha3::Sha3_256::digest(serialized);
@@ -59,13 +59,13 @@ impl<TXS: BorshSerialize> Payload<TXS> {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub struct SlotPayload<TXS> {
+pub struct SlotPayload<TX> {
     pub slot: Slot,
     pub previous_blockhash: Hash,
     pub blockhash: Hash,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
-    pub txs: TXS,
+    pub txs: Vec<TX>,
     pub bank_hash: Hash,
 }
 
