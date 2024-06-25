@@ -6,10 +6,7 @@ use std::fmt::Debug;
 use jsonrpsee::{proc_macros::rpc, types::ErrorObjectOwned};
 
 #[rpc(server, client, namespace = "engine")]
-pub trait L2EngineApi<TX>
-where
-    TX: borsh::BorshSerialize + borsh::BorshDeserialize + std::fmt::Debug + PartialEq + Clone,
-{
+pub trait L2EngineApi<TX> {
     #[method(name = "l2Info_v1")]
     async fn l2_info(&self) -> Result<L2Info, ErrorObjectOwned>;
 
@@ -45,20 +42,14 @@ pub struct L1Slot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub struct Payload<T>
-where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq,
-{
+pub struct Payload<T> {
     pub id: PayloadId,
     pub parent_payload: PayloadId,
     pub slots: Vec<SlotPayload<T>>,
     pub checkpoint: Hash,
 }
 
-impl<T> Payload<T>
-where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq,
-{
+impl<T: BorshSerialize> Payload<T> {
     pub fn hash(&self) -> Hash {
         let serialized = borsh::to_vec(self).expect("Never fails");
         let digest = sha3::Sha3_256::digest(serialized);
@@ -68,10 +59,7 @@ where
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub struct SlotPayload<T>
-where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq,
-{
+pub struct SlotPayload<T> {
     pub slot: Slot,
     pub previous_blockhash: Hash,
     pub blockhash: Hash,
