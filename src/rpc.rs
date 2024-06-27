@@ -29,6 +29,8 @@ pub trait L2EngineApi {
 pub struct PayloadAttrs {
     pub parent_payload: PayloadId,
     pub events: Vec<SlotEvents<L1Event>>,
+    /// Max payload size in bytes.
+    pub max_payload_size: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
