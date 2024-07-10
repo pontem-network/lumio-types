@@ -1,3 +1,5 @@
+use std::mem::size_of;
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use sha3::Digest;
@@ -30,4 +32,14 @@ pub struct SlotPayload {
     pub block_height: Option<u64>,
     pub txs: Vec<Transaction>,
     pub bank_hash: Hash,
+}
+
+impl SlotPayload {
+    pub fn size(&self) -> usize {
+        size_of::<Slot>()
+            + size_of::<Hash>() * 3
+            + size_of::<Option<UnixTimestamp>>()
+            + size_of::<Option<u64>>()
+            + self.txs.iter().map(|tx| tx.len()).sum::<usize>()
+    }
 }
