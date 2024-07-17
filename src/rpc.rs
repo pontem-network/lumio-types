@@ -69,7 +69,7 @@ mod test {
     use rand::random;
 
     use crate::{
-        payload::{Payload, SlotPayload, Transaction},
+        payload::{Payload, SlotPayload},
         Hash,
     };
 
@@ -83,7 +83,7 @@ mod test {
                 blockhash: Hash::from(random::<[u8; 32]>()),
                 block_time: None,
                 block_height: None,
-                txs: vec![Transaction::from(vec![1, 2, 3])],
+                txs: vec![vec![1, 2, 3]],
                 bank_hash: Hash::from(random::<[u8; 32]>()),
             }],
             checkpoint: Hash::from(random::<[u8; 32]>()),
