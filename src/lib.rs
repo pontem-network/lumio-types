@@ -13,3 +13,5 @@ pub type Version = u64;
 pub type PayloadId = u64;
 
 pub type UnixTimestamp = i64;
+
+pub type Transaction = Vec<u8>;
