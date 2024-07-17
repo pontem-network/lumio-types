@@ -2,6 +2,10 @@ use std::mem::size_of;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
+use serde_with::{
+    base64::{Base64, Standard},
+    formats::Unpadded,
+};
 use sha3::Digest;
 
 use crate::{Hash, PayloadId, Slot, Transaction, UnixTimestamp};
@@ -23,6 +27,7 @@ impl Payload {
     }
 }
 
+#[serde_with::serde_as]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct SlotPayload {
     pub slot: Slot,
@@ -30,6 +35,7 @@ pub struct SlotPayload {
     pub blockhash: Hash,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
+    #[serde_as(as = "Vec<Base64<Standard, Unpadded>>")]
     pub txs: Vec<Transaction>,
     pub bank_hash: Hash,
 }
