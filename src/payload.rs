@@ -8,7 +8,7 @@ use serde_with::{
 };
 use sha3::Digest;
 
-use crate::{Hash, PayloadId, Slot, UnixTimestamp};
+use crate::{Hash, PayloadId, Slot, Transaction, UnixTimestamp};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct Payload {
@@ -36,8 +36,7 @@ pub struct SlotPayload {
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
     #[serde_as(as = "Vec<Base64<Standard, Unpadded>>")]
-    pub txs: Vec<Vec<u8>>,
-    // pub txs: Vec<Transaction>,
+    pub txs: Vec<Transaction>,
     pub bank_hash: Hash,
 }
 
