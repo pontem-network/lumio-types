@@ -23,6 +23,25 @@ pub trait L2EngineApi {
 
     #[method(name = "setSyncMode_v1")]
     async fn set_sync_mode(&self, sync_mode: SyncMode) -> Result<(), ErrorObjectOwned>;
+
+    #[method(name = "setPayloadStatus_v1")]
+    async fn set_payload_status(&self, id: PayloadId, status: PayloadStatus) -> Result<(), ErrorObjectOwned>;
+}
+
+// Copied from here: https://docs.optimism.io/builders/app-developers/transactions/statuses
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum PayloadStatus {
+    /// By default
+    #[default]
+    Pending,
+    /// Given away to sequencer
+    Unsafe,
+    /// Sent to L1/DA
+    Safe,
+    /// Finalized on L1/DA
+    L1Finalized,
+    /// Wasn't disputed
+    Finalized,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
