@@ -71,6 +71,9 @@ impl<L: Ledger> PayloadService<L> {
     }
 
     fn print_statisitc(&self) {
+        if self.tasks.is_empty() {
+            return;
+        }
         debug!("Tasks in progress:");
         for task in &self.tasks {
             debug!(
