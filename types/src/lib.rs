@@ -1,9 +1,6 @@
-#![warn(unused_crate_dependencies)]
-
 pub mod events;
 pub mod h256;
 pub mod payload;
-pub mod rpc;
 
 pub type Address = h256::H256;
 pub type Hash = h256::H256;

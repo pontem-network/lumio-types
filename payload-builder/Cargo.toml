@@ -1,0 +1,9 @@
+[package]
+name = "lumio-payload-builder"
+
+edition.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

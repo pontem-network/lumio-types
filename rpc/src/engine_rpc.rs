@@ -1,9 +1,9 @@
-use crate::{
+use jsonrpsee::{proc_macros::rpc, types::ErrorObjectOwned};
+use lumio_types::{
     events::{l1::L1Event, l2::L2Event},
     payload::Payload,
     Hash, PayloadId, Slot, Version,
 };
-use jsonrpsee::{proc_macros::rpc, types::ErrorObjectOwned};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -25,7 +25,11 @@ pub trait L2EngineApi {
     async fn set_sync_mode(&self, sync_mode: SyncMode) -> Result<(), ErrorObjectOwned>;
 
     #[method(name = "setPayloadStatus_v1")]
-    async fn set_payload_status(&self, id: PayloadId, status: PayloadStatus) -> Result<(), ErrorObjectOwned>;
+    async fn set_payload_status(
+        &self,
+        id: PayloadId,
+        status: PayloadStatus,
+    ) -> Result<(), ErrorObjectOwned>;
 }
 
 // Copied from here: https://docs.optimism.io/builders/app-developers/transactions/statuses
@@ -87,7 +91,7 @@ pub enum SyncMode {
 mod test {
     use rand::random;
 
-    use crate::{
+    use lumio_types::{
         payload::{Payload, SlotPayload},
         Hash,
     };

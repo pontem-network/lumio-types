@@ -1,18 +1,31 @@
-[package]
-name = "lumio-types"
+[workspace]
+resolver = "2"
 
+members = [
+  "rpc",
+  "types",
+  "payload-builder",
+]
+
+[workspace.package]
 edition = "2021"
+name = "lumio-common"
 version = "0.1.0"
 
-[dependencies]
-borsh = { version = "1", features = ["derive"] }
-hex = "0.4"
-serde = { version = "1", features = ["derive"] }
-sha3 = "0.10"
-jsonrpsee = { version = "0.24", features = ["server-core", "client-core", "macros"]}
-derive_more = "0.99"
-serde_with = { version = "3", features = ["base64"] }
+[workspace.dependencies]
+lumio-payload-builder = {path = "payload-builder"}
+lumio-rpc = {path = "rpc"}
+lumio-types = {path = "types"}
 
-[dev-dependencies]
-serde_json = "1.0"
+borsh = {version = "1", features = ["derive"]}
+derive_more = "0.99"
+hex = "0.4"
+jsonrpsee = {version = "0.24", features = ["server-core", "client-core", "macros"]}
 rand = "0.8"
+serde = {version = "1", features = ["derive"]}
+serde_json = "1.0"
+serde_with = {version = "3", features = ["base64"]}
+sha3 = "0.10"
+
+[workspace.lints.rust]
+unused_crate_dependencies = "warn"
