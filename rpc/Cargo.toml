@@ -1,0 +1,13 @@
+[package]
+name = "lumio-rpc"
+edition.workspace = true 
+
+[dependencies]
+lumio-types.workspace = true
+
+jsonrpsee.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+rand.workspace = true
+serde_json.workspace = true
