@@ -167,7 +167,7 @@ impl Display for Statictic {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Duration: {:?}, Progress: {:.2}%, Size: {}, Max Size: {} kib, Slots: {} kib",
+            "Duration: {:?}, Progress: {:.2}%, Size: {} kib, Max Size: {} kib, Slots: {}",
             self.duration,
             self.progress,
             self.size / 1024,
