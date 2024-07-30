@@ -4,6 +4,15 @@ name = "lumio-payload-builder"
 edition.workspace = true
 
 [dependencies]
+lumio-rpc.workspace = true
+lumio-types.workspace = true
+
+anyhow.workspace = true
+borsh.workspace = true
+tokio.workspace = true
+serde.workspace = true
+log.workspace = true
+sha3.workspace = true
 
 [lints]
 workspace = true
