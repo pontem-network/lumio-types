@@ -13,5 +13,5 @@ pub trait Ledger {
     fn get_slot(
         &mut self,
         slot_id: Slot,
-    ) -> impl Future<Output = Result<Option<SlotArtifact>, Error>> + Send + 'static;
+    ) -> impl Future<Output = Result<Option<SlotArtifact>, Error>> + Send;
 }
