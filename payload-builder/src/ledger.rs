@@ -7,7 +7,7 @@ use crate::SlotArtifact;
 
 pub trait Ledger {
     /// Get the current slot.
-    fn get_current_slot(&self) -> impl Future<Output = Result<Slot, Error>> + Send + 'static;
+    fn get_current_slot(&self) -> Result<Slot, Error>;
     /// Get the slot artifact by slot id. If the slot with slot_id skipped, return next slot.
     /// If the slot with slot_id has not been produced yet, return None.
     fn get_slot(
