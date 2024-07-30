@@ -30,6 +30,7 @@ serde_json = "1.0"
 serde_with = {version = "3", features = ["base64"]}
 sha3 = "0.10"
 tokio = {version = "1.29.1", features = ["rt"]}
+strum = {version = "0.21", features = ["derive"]}
 
 [workspace.lints.rust]
 unused_crate_dependencies = "warn"
