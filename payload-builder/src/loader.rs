@@ -26,7 +26,7 @@ impl<L: Ledger> SlotLoader<L> {
     }
 
     pub async fn warmup(&mut self) -> Result<(), Error> {
-        let current_slot = self.ledger.get_current_slot().await?;
+        let current_slot = self.ledger.get_current_slot()?;
         if self.cache.contains(current_slot) {
             return Ok(());
         }
