@@ -16,6 +16,7 @@ version = "0.1.0"
 lumio-payload-builder = {path = "payload-builder"}
 lumio-rpc = {path = "rpc"}
 lumio-types = {path = "types"}
+lumio-white-list = {path = "white-list"}
 
 anyhow = "1.0.82"
 borsh = {version = "1", features = ["derive"]}

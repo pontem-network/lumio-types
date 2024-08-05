@@ -1,0 +1,23 @@
+[package]
+name = "lumio-white-list"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+arc-swap = "1.7.1"
+log.workspace = true
+reqwest = {version = "0.12.4", features = ["json"]}
+serde.workspace = true
+serde_with.workspace = true
+solana-sdk.workspace = true
+tokio.workspace = true
+url.workspace = true
+
+[lints]
+workspace = true
