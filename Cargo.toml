@@ -21,6 +21,7 @@ lumio-rpc = {path = "rpc"}
 lumio-types = {path = "types"}
 
 anyhow = "1.0.82"
+arc-swap = "1.7.1"
 borsh = {version = "1", features = ["derive"]}
 derive_more = "0.99"
 futures = "0.3.30"
@@ -28,6 +29,7 @@ hex = "0.4"
 jsonrpsee = {version = "0.24", features = ["server-core", "client-core", "macros"]}
 log = "0.4.14"
 rand = "0.8"
+reqwest = {version = "0.12.4", features = ["json"]}
 serde = {version = "1", features = ["derive"]}
 serde_json = "1.0"
 serde_with = {version = "3", features = ["base64"]}
