@@ -7,7 +7,21 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use derive_more::{AsRef, From, Into};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, PartialEq, BorshSerialize, BorshDeserialize, Default, From, Into, AsRef)]
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    BorshSerialize,
+    BorshDeserialize,
+    Default,
+    From,
+    Into,
+    AsRef,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+)]
 pub struct H256(pub [u8; 32]);
 
 impl Display for H256 {

@@ -1,18 +1,19 @@
-use std::{borrow::Borrow, collections::HashSet, sync::Arc, time::Duration};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
 use log::{debug, error};
+use lumio_types::h256::H256;
 use reqwest::Error;
-use serde::Deserialize;
-use solana_sdk::pubkey::Pubkey;
 use url::Url;
+
+type Address = H256;
 
 pub struct WhiteList {
     accounts: ArcSwap<HashSet<Address>>,
 }
 
 impl WhiteList {
-    pub fn is_account_exist(&self, key: &Pubkey) -> bool {
+    pub fn is_account_exist(&self, key: &Address) -> bool {
         self.accounts.load().contains(key)
     }
 }
@@ -69,16 +70,5 @@ impl WhiteListHolder {
 
     pub fn get_white_list(&self) -> Arc<WhiteList> {
         Arc::clone(&self.white_list)
-    }
-}
-
-#[serde_with::serde_as]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash, Deserialize)]
-#[serde(transparent)]
-struct Address(#[serde_as(as = "serde_with::DisplayFromStr")] Pubkey);
-
-impl Borrow<Pubkey> for Address {
-    fn borrow(&self) -> &Pubkey {
-        &self.0
     }
 }
