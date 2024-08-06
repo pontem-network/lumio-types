@@ -13,8 +13,14 @@ pub struct WhiteList {
 }
 
 impl WhiteList {
-    pub fn is_account_exist(&self, key: &Address) -> bool {
-        self.accounts.load().contains(key)
+    pub fn is_account_exist<T>(&self, key: T) -> bool
+    where
+        T: TryInto<H256>,
+    {
+        let Ok(address) = key.try_into() else {
+            return false;
+        };
+        self.accounts.load().contains(&address)
     }
 }
 
