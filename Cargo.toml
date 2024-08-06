@@ -5,18 +5,20 @@ members = [
   "rpc",
   "types",
   "payload-builder",
+  "white-list",
 ]
 
 [workspace.package]
+authors = ["Pontem Network"]
 edition = "2021"
-name = "lumio-common"
+homepage = "https://pontem.network/"
+repository = "https://github.com/pontem-network/lumio-types"
 version = "0.1.0"
 
 [workspace.dependencies]
 lumio-payload-builder = {path = "payload-builder"}
 lumio-rpc = {path = "rpc"}
 lumio-types = {path = "types"}
-lumio-white-list = {path = "white-list"}
 
 anyhow = "1.0.82"
 borsh = {version = "1", features = ["derive"]}
@@ -30,8 +32,9 @@ serde = {version = "1", features = ["derive"]}
 serde_json = "1.0"
 serde_with = {version = "3", features = ["base64"]}
 sha3 = "0.10"
-tokio = {version = "1.29.1", features = ["rt"]}
 strum = {version = "0.21", features = ["derive"]}
+tokio = {version = "1.29.1", features = ["rt"]}
+url = "2.5.2"
 
 [workspace.lints.rust]
 unused_crate_dependencies = "warn"
