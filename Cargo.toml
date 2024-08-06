@@ -23,6 +23,7 @@ lumio-types = {path = "types"}
 anyhow = "1.0.82"
 arc-swap = "1.7.1"
 borsh = {version = "1", features = ["derive"]}
+bs58 = "0.5.1"
 derive_more = "0.99"
 futures = "0.3.30"
 hex = "0.4"
