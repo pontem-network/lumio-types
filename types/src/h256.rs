@@ -115,10 +115,16 @@ mod tests {
             "0x863995c08b6e10ba2c2abb5985f3983e87e64f124099addffc5d3559d109c04e",
             "863995c08b6e10ba2c2abb5985f3983e87e64f124099addffc5d3559d109c04e",
             "0x1",
-            "BFvf3yghkBJEZAbDzx6YpAcQdekm7frU3epKXdZmE7E5",
         ] {
-            H256::from_str(address_str).unwrap();
+            let result = H256::from_str(address_str).unwrap();
+            assert_eq!(
+                address_str.trim_start_matches("0x"),
+                result.to_string().trim_start_matches("0")
+            );
         }
+        let sol_address_str = "BFvf3yghkBJEZAbDzx6YpAcQdekm7frU3epKXdZmE7E5";
+        let sol_address = H256::from_str(sol_address_str).unwrap();
+        assert_eq!(&bs58::encode(sol_address.0).into_string(), sol_address_str);
 
         // https://raw.githubusercontent.com/pontem-network/eth-faucet-whitelist/main/src/mvm.whiteList.json
         let _: HashSet<H256> = serde_json::from_str(
