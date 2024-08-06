@@ -8,7 +8,6 @@ lumio-rpc.workspace = true
 lumio-types.workspace = true
 
 anyhow.workspace = true
-borsh.workspace = true
 tokio.workspace = true
 serde.workspace = true
 log.workspace = true

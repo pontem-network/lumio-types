@@ -1,0 +1,19 @@
+[package]
+name = "lumio-white-list"
+version = "1.0.0"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+arc-swap.workspace = true
+log.workspace = true
+lumio-types.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
+url.workspace = true
+
+[lints]
+workspace = true
