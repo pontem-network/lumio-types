@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::ensure;
+use anyhow::anyhow;
 use borsh::{BorshDeserialize, BorshSerialize};
 use derive_more::{AsRef, From, Into};
 use serde::{Deserialize, Serialize};
@@ -47,28 +47,26 @@ impl FromStr for H256 {
     type Err = anyhow::Error;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let bytes: Vec<u8> = match (value, value.len()) {
+        let mut array = [0; 32];
+
+        match (value, value.len()) {
             // Etherium | Aptos
-            (s, 64) => hex::decode(s)?,
-            (s, _) if s.starts_with("0x") => {
-                let mut value = s.trim_start_matches("0x").to_string();
-                if value.len() < 64 {
-                    value = format!("{value:0>64}")
+            (s, l) if l > 44 || s.starts_with("0x") => {
+                let value = s.trim_start_matches("0x");
+                if value.len() == 64 {
+                    hex::decode_to_slice(value, &mut array)?;
+                } else {
+                    hex::decode_to_slice(&format!("{value:0>64}"), &mut array)?;
                 }
-                hex::decode(&value)?
             }
             // solana
-            (s, _) => bs58::decode(s).into_vec()?,
+            (s, _) => {
+                array = bs58::decode(s)
+                    .into_vec()?
+                    .try_into()
+                    .map_err(|_| anyhow!("invalid address length"))?;
+            }
         };
-
-        ensure!(
-            bytes.len() == 32,
-            "{}",
-            hex::FromHexError::InvalidStringLength
-        );
-
-        let mut array = [0; 32];
-        array.copy_from_slice(&bytes);
 
         Ok(H256(array))
     }
@@ -89,7 +87,11 @@ impl<'de> Deserialize<'de> for H256 {
         D: serde::Deserializer<'de>,
     {
         let s: &str = Deserialize::deserialize(deserializer)?;
-        s.parse().map_err(serde::de::Error::custom)
+        let result = s.parse().map_err(serde::de::Error::custom);
+        if result.is_err() {
+            return Ok(H256::default());
+        }
+        result
     }
 }
 
@@ -131,6 +133,26 @@ mod tests {
             r#"["019b68599dd727829dfc5036dec02464abeacdf76e5d17ce43352533b1b212b8", "43417434fd869edee76cca2a4d2301e528a1551b1d719b75c350c3c97d15b8b9", "32d42921e177db242f5550ebd5a899fd84d539511d95f5f032e8a2a8900b6354", "a50a51ffd9db0009d3d75515e1ea414c5bd7f692e9c6d260d8643bda7e35b113"]"#,
         )
         .unwrap();
+
+        // invalid value
+        for s in [
+            "a6a34cfb14dc99e5bd582fa0ac000d9e27c3437d7f63397ef384f147a44dd212c",
+            "0xa6a34cfb14dc99e5bd582fa0ac000d9e27c3437d7f63397ef384f147a44dd212c",
+        ] {
+            assert!(H256::from_str(s).is_err());
+        }
+
+        // invalid value: a6a34cfb14dc99e5bd582fa0ac000d9e27c3437d7f63397ef384f147a44dd212c
+        // Exists in the list https://raw.githubusercontent.com/pontem-network/eth-faucet-whitelist/main/src/mvm.whiteList.json
+        let list: HashSet<H256> = serde_json::from_str(
+            r#"[
+                "9cf4723f4bd23a841e7a5bcdccc6e7fb35a76784e8c041a515f6368b17ebcbf",
+                "019b68599dd727829dfc5036dec02464abeacdf76e5d17ce43352533b1b212b8",
+                "a6a34cfb14dc99e5bd582fa0ac000d9e27c3437d7f63397ef384f147a44dd212c"
+            ]"#,
+        )
+        .unwrap();
+        assert!(list.contains(&H256::default()));
 
         // https://raw.githubusercontent.com/pontem-network/eth-faucet-whitelist/main/src/sol.whiteList.json
         let _: HashSet<H256> = serde_json::from_str(

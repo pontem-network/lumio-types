@@ -49,6 +49,15 @@ impl WhiteListHolder {
         }
     }
 
+    pub fn new_with_list(url: Url, refresh_rate: Duration, white_list: Arc<WhiteList>) -> Self {
+        Self {
+            white_list,
+            url,
+            refresh_rate,
+            http: reqwest::Client::new(),
+        }
+    }
+
     pub async fn refresh_task(mut self) {
         let mut interval = tokio::time::interval(self.refresh_rate);
         loop {
