@@ -1,12 +1,14 @@
 use serde::{Deserialize, Serialize};
 use strum::IntoStaticStr;
 
+use crate::h256::H256;
+
 use super::Bridge;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, IntoStaticStr)]
 pub enum L1Event {
     Deposit(Bridge),
-    Spl(SplL1Event);
+    Spl(SplL1Event)
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, IntoStaticStr)]
