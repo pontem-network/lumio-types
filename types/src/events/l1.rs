@@ -21,6 +21,5 @@ pub enum SplL1Event {
         l1_mint: H256,
         to: H256,
         amount: u64,
-        funding: bool,
     },
 }
