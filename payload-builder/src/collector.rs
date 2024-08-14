@@ -1,3 +1,4 @@
+use anyhow::Context;
 use lumio_rpc::{AttributesArtifact, SlotEvents};
 use lumio_types::{
     events::l2::L2Event,
@@ -34,8 +35,8 @@ impl ArtifactCollector {
         self.max_payload_size
     }
 
-    pub fn collect(&mut self) -> AttributesArtifact {
-        let id = self.slots.last().unwrap().slot;
+    pub fn collect(&mut self) -> anyhow::Result<AttributesArtifact> {
+        let id: u64 = self.slots.last().context("Empty slot list")?.slot;
 
         let mut hasher = sha3::Sha3_256::default();
         for slot in &self.slots {
@@ -51,10 +52,10 @@ impl ArtifactCollector {
             id,
         };
 
-        AttributesArtifact {
+        Ok(AttributesArtifact {
             payload,
             events: std::mem::take(&mut self.events),
-        }
+        })
     }
 
     pub fn try_add(&mut self, slot: SlotPayload, events: SlotEvents<L2Event>) -> bool {

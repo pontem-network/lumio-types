@@ -145,7 +145,7 @@ impl Task {
             let next_slot = self.collector.next_slot();
             if let Some((slot, events)) = loader.get_slot(next_slot).await? {
                 if !self.collector.try_add(slot, events) {
-                    return Ok(Some(self.collector.collect()));
+                    return Ok(Some(self.collector.collect()?));
                 }
             } else {
                 break;
