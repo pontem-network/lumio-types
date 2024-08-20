@@ -12,6 +12,9 @@ pub trait L2EngineApi {
     #[method(name = "l2Info_v1")]
     async fn l2_info(&self) -> Result<L2Info, ErrorObjectOwned>;
 
+    #[method(name = "versionInfo_v1")]
+    async fn version_info(&self) -> Result<VersionInfo, ErrorObjectOwned>;
+
     #[method(name = "applyAttributes_v1")]
     async fn apply_attributes(
         &self,
@@ -85,6 +88,12 @@ pub enum SyncMode {
     Normal,
     #[default]
     Sync,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct VersionInfo {
+    pub version: String,
+    pub git_commit: String,
 }
 
 #[cfg(test)]
