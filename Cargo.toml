@@ -5,6 +5,7 @@ members = [
   "rpc",
   "types",
   "payload-builder",
+  "p2p",
   "white-list",
 ]
 
@@ -25,9 +26,11 @@ arc-swap = "1.7.1"
 borsh = {version = "1", features = ["derive"]}
 bs58 = "0.5.1"
 derive_more = "0.99"
+eyre = "0.6"
 futures = "0.3.30"
 hex = "0.4"
 jsonrpsee = {version = "0.24", features = ["server-core", "client-core", "macros"]}
+libp2p = "0.54"
 log = "0.4.14"
 rand = "0.8"
 reqwest = {version = "0.12.4", features = ["json"]}
@@ -37,6 +40,7 @@ serde_with = {version = "3", features = ["base64"]}
 sha3 = "0.10"
 strum = {version = "0.21", features = ["derive"]}
 tokio = {version = "1.29.1", features = ["rt"]}
+tracing = "0.1"
 url = "2.5.2"
 
 [workspace.lints.rust]
