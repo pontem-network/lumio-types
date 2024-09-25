@@ -2,14 +2,19 @@ use eyre::WrapErr;
 use futures::StreamExt;
 use libp2p::multiaddr::Multiaddr;
 use libp2p::{
-    gossipsub::{self, IdentTopic},
+    gossipsub::{self, IdentTopic, TopicHash},
     mdns,
     swarm::SwarmEvent,
 };
+use serde::{Deserialize, Serialize};
 
 use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
 use std::time::Duration;
+
+pub use jwt::JwtSecret;
+
+mod jwt;
 
 // We create a custom network behaviour that combines Gossipsub and Mdns.
 #[derive(libp2p::swarm::NetworkBehaviour)]
@@ -18,9 +23,11 @@ struct LumioBehaviour {
     mdns: mdns::tokio::Behaviour,
 }
 
+#[derive(Debug, Clone)]
 pub struct Config {
-    listen_on: Vec<Multiaddr>,
-    bootstrap_addresses: Vec<Multiaddr>,
+    pub listen_on: Vec<Multiaddr>,
+    pub bootstrap_addresses: Vec<Multiaddr>,
+    pub jwt: JwtSecret,
 }
 
 pub struct Node {}
@@ -53,10 +60,12 @@ impl Node {
                     .build()?;
 
                 // build a gossipsub network behaviour
-                let gossipsub = gossipsub::Behaviour::new(
+                let mut gossipsub = gossipsub::Behaviour::new(
                     gossipsub::MessageAuthenticity::Signed(key.clone()),
                     gossipsub_config,
                 )?;
+
+                gossipsub.subscribe(&AUTH_TOPIC)?;
 
                 let mdns = mdns::tokio::Behaviour::new(
                     mdns::Config::default(),
@@ -67,17 +76,20 @@ impl Node {
             .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
             .build();
 
-        // subscribes to our topic
-        swarm.behaviour_mut().gossipsub.subscribe(&AUTH_TOPIC)?;
+        let Config {
+            listen_on,
+            bootstrap_addresses,
+            jwt,
+        } = cfg;
 
-        // Listen on all interfaces and whatever port the OS assigns
-        swarm.listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse()?)?;
-        swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
+        for a in listen_on {
+            swarm.listen_on(a).context("Failed to listen on address")?;
+        }
 
         swarm
             .behaviour_mut()
             .gossipsub
-            .publish(AUTH_TOPIC.clone(), todo!("JWT") as Vec<u8>)
+            .publish(AUTH_TOPIC.clone(), jwt.claim()?)
             .context("Failed to auth")?;
 
         // Kick it off
@@ -98,16 +110,17 @@ impl Node {
                         }
                     },
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Gossipsub(gossipsub::Event::Message {
-                        propagation_source: peer_id,
-                        message_id: id,
                         message: libp2p::gossipsub::Message {
                             data,
                             topic,
                             ..
                         },
+                        ..
                     })) => {
                         match topic {
-                            t if t == auth_topic_hash => todo!("Auth"),
+                            t if t == auth_topic_hash => {
+                                jwt.decode(String::from_utf8(data).expect("FIXME")).expect("FIXME");
+                            }
                             _ => unreachable!(),
                         }
                     },
