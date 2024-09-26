@@ -12,9 +12,12 @@ use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
 use std::time::Duration;
 
+use node_runner::NodeRunner;
+
 pub use jwt::JwtSecret;
 
 mod jwt;
+pub mod node_runner;
 
 // We create a custom network behaviour that combines Gossipsub and Mdns.
 #[derive(libp2p::swarm::NetworkBehaviour)]
@@ -59,12 +62,6 @@ enum Command {
 
 pub struct Node {
     cmd_sender: futures::channel::mpsc::Sender<Command>,
-}
-
-pub struct NodeRunner {
-    swarm: Swarm<LumioBehaviour>,
-    jwt: JwtSecret,
-    cmd_receiver: futures::channel::mpsc::Receiver<Command>,
 }
 
 static AUTH_TOPIC: LazyLock<IdentTopic> = LazyLock::new(|| IdentTopic::new("/lumio/v1/auth"));
@@ -139,50 +136,5 @@ impl Node {
                 cmd_receiver,
             },
         ))
-    }
-}
-
-impl NodeRunner {
-    // -> !
-    pub async fn run(mut self) {
-        // Kick it off
-        let auth_topic_hash = AUTH_TOPIC.hash();
-        loop {
-            futures::select! {
-                event = self.swarm.select_next_some() => match event {
-                    SwarmEvent::Behaviour(LumioBehaviourEvent::Mdns(mdns::Event::Discovered(list))) => {
-                        for (peer_id, _multiaddr) in list {
-                            tracing::debug!("mDNS discovered a new peer: {peer_id}");
-                            self.swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
-                        }
-                    },
-                    SwarmEvent::Behaviour(LumioBehaviourEvent::Mdns(mdns::Event::Expired(list))) => {
-                        for (peer_id, _multiaddr) in list {
-                            tracing::debug!("mDNS discover peer has expired: {peer_id}");
-                            self.swarm.behaviour_mut().gossipsub.remove_explicit_peer(&peer_id);
-                        }
-                    },
-                    SwarmEvent::Behaviour(LumioBehaviourEvent::Gossipsub(gossipsub::Event::Message {
-                        message: libp2p::gossipsub::Message {
-                            data,
-                            topic,
-                            ..
-                        },
-                        ..
-                    })) => {
-                        match topic {
-                            t if t == auth_topic_hash => {
-                                self.jwt.decode(String::from_utf8(data).expect("FIXME")).expect("FIXME");
-                            }
-                            _ => unreachable!(),
-                        }
-                    },
-                    SwarmEvent::NewListenAddr { address, .. } => {
-                        tracing::debug!("Local node is listening on {address}");
-                    }
-                    _ => {}
-                }
-            }
-        }
     }
 }
