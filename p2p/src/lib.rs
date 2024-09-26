@@ -1,10 +1,9 @@
-use eyre::WrapErr;
-use futures::StreamExt;
+use eyre::{Result, WrapErr};
+use futures::prelude::*;
 use libp2p::multiaddr::Multiaddr;
 use libp2p::{
     gossipsub::{self, IdentTopic},
     mdns,
-    swarm::{Swarm, SwarmEvent},
 };
 use lumio_types::rpc::{AttributesArtifact, LumioEvents};
 
@@ -60,6 +59,7 @@ enum Command {
     SendEvent(SendEventCommand),
 }
 
+#[derive(Debug, Clone)]
 pub struct Node {
     cmd_sender: futures::channel::mpsc::Sender<Command>,
 }
@@ -136,5 +136,81 @@ impl Node {
                 cmd_receiver,
             },
         ))
+    }
+
+    pub async fn subscribe_op_move_events(
+        &mut self,
+    ) -> Result<impl Stream<Item = AttributesArtifact> + Unpin + 'static> {
+        let (sender, receiver) = futures::channel::mpsc::channel(10);
+        self.cmd_sender
+            .send(Command::Subscribe(SubscribeCommand::OpMove(sender)))
+            .await
+            .context("Node runner is probably dead")?;
+        Ok(receiver)
+    }
+
+    pub async fn subscribe_op_sol_events(
+        &mut self,
+    ) -> Result<impl Stream<Item = AttributesArtifact> + Unpin + 'static> {
+        let (sender, receiver) = futures::channel::mpsc::channel(10);
+        self.cmd_sender
+            .send(Command::Subscribe(SubscribeCommand::OpSol(sender)))
+            .await
+            .context("Node runner is probably dead")?;
+        Ok(receiver)
+    }
+
+    pub async fn subscribe_lumio_op_sol_events(
+        &mut self,
+    ) -> Result<impl Stream<Item = LumioEvents> + Unpin + 'static> {
+        let (sender, receiver) = futures::channel::mpsc::channel(20);
+        self.cmd_sender
+            .send(Command::Subscribe(SubscribeCommand::LumioOpSol(sender)))
+            .await
+            .context("Node runner is probably dead")?;
+        Ok(receiver)
+    }
+
+    pub async fn subscribe_lumio_op_move_events(
+        &mut self,
+    ) -> Result<impl Stream<Item = LumioEvents> + Unpin + 'static> {
+        let (sender, receiver) = futures::channel::mpsc::channel(20);
+        self.cmd_sender
+            .send(Command::Subscribe(SubscribeCommand::LumioOpMove(sender)))
+            .await
+            .context("Node runner is probably dead")?;
+        Ok(receiver)
+    }
+
+    pub async fn send_lumio_op_move(&mut self, events: LumioEvents) -> Result<()> {
+        self.cmd_sender
+            .send(Command::SendEvent(SendEventCommand::LumioOpMove(events)))
+            .await
+            .context("Node runner is probably dead")?;
+        Ok(())
+    }
+
+    pub async fn send_lumio_op_sol(&mut self, events: LumioEvents) -> Result<()> {
+        self.cmd_sender
+            .send(Command::SendEvent(SendEventCommand::LumioOpSol(events)))
+            .await
+            .context("Node runner is probably dead")?;
+        Ok(())
+    }
+
+    pub async fn send_op_sol(&mut self, artifacts: AttributesArtifact) -> Result<()> {
+        self.cmd_sender
+            .send(Command::SendEvent(SendEventCommand::OpSol(artifacts)))
+            .await
+            .context("Node runner is probably dead")?;
+        Ok(())
+    }
+
+    pub async fn send_op_move(&mut self, artifacts: AttributesArtifact) -> Result<()> {
+        self.cmd_sender
+            .send(Command::SendEvent(SendEventCommand::OpMove(artifacts)))
+            .await
+            .context("Node runner is probably dead")?;
+        Ok(())
     }
 }
