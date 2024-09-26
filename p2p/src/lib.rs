@@ -85,6 +85,9 @@ impl Node {
         for a in listen_on {
             swarm.listen_on(a).context("Failed to listen on address")?;
         }
+        for a in bootstrap_addresses {
+            swarm.dial(a).context("Failed to listen on address")?;
+        }
 
         swarm
             .behaviour_mut()
