@@ -4,7 +4,7 @@ use libp2p::multiaddr::Multiaddr;
 use libp2p::{
     gossipsub::{self, IdentTopic, TopicHash},
     mdns,
-    swarm::SwarmEvent,
+    swarm::{SwarmEvent, Swarm},
 };
 use serde::{Deserialize, Serialize};
 
@@ -32,10 +32,15 @@ pub struct Config {
 
 pub struct Node {}
 
+pub struct NodeRunner {
+    swarm: Swarm<LumioBehaviour>,
+    jwt: JwtSecret,
+}
+
 static AUTH_TOPIC: LazyLock<IdentTopic> = LazyLock::new(|| IdentTopic::new("/lumio/v1/auth"));
 
 impl Node {
-    pub async fn spawn(cfg: Config) -> eyre::Result<Self> {
+    pub fn new(cfg: Config) -> eyre::Result<(Self, NodeRunner)> {
         let mut swarm = libp2p::SwarmBuilder::with_new_identity()
             .with_tokio()
             .with_tcp(
@@ -95,21 +100,28 @@ impl Node {
             .publish(AUTH_TOPIC.clone(), jwt.claim()?)
             .context("Failed to auth")?;
 
+        Ok((Self {}, NodeRunner { swarm, jwt }))
+    }
+}
+
+impl NodeRunner {
+    // -> !
+    pub async fn run(mut self) {
         // Kick it off
         let auth_topic_hash = AUTH_TOPIC.hash();
         loop {
             futures::select! {
-                event = swarm.select_next_some() => match event {
+                event = self.swarm.select_next_some() => match event {
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Mdns(mdns::Event::Discovered(list))) => {
                         for (peer_id, _multiaddr) in list {
                             tracing::debug!("mDNS discovered a new peer: {peer_id}");
-                            swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
+                            self.swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
                         }
                     },
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Mdns(mdns::Event::Expired(list))) => {
                         for (peer_id, _multiaddr) in list {
                             tracing::debug!("mDNS discover peer has expired: {peer_id}");
-                            swarm.behaviour_mut().gossipsub.remove_explicit_peer(&peer_id);
+                            self.swarm.behaviour_mut().gossipsub.remove_explicit_peer(&peer_id);
                         }
                     },
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Gossipsub(gossipsub::Event::Message {
@@ -122,7 +134,7 @@ impl Node {
                     })) => {
                         match topic {
                             t if t == auth_topic_hash => {
-                                jwt.decode(String::from_utf8(data).expect("FIXME")).expect("FIXME");
+                                self.jwt.decode(String::from_utf8(data).expect("FIXME")).expect("FIXME");
                             }
                             _ => unreachable!(),
                         }
