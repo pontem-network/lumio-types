@@ -4,7 +4,7 @@ use libp2p::multiaddr::Multiaddr;
 use libp2p::{
     gossipsub::{self, IdentTopic, TopicHash},
     mdns,
-    swarm::{SwarmEvent, Swarm},
+    swarm::{Swarm, SwarmEvent},
 };
 use serde::{Deserialize, Serialize};
 

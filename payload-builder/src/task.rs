@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::{anyhow, Error};
 use log::{debug, warn};
-use lumio_rpc::AttributesArtifact;
+use lumio_types::rpc::AttributesArtifact;
 use lumio_types::Slot;
 use tokio::sync::oneshot::{self, error::TryRecvError};
 

@@ -56,7 +56,7 @@ impl FromStr for H256 {
                 if value.len() == 64 {
                     hex::decode_to_slice(value, &mut array)?;
                 } else {
-                    hex::decode_to_slice(&format!("{value:0>64}"), &mut array)?;
+                    hex::decode_to_slice(format!("{value:0>64}"), &mut array)?;
                 }
             }
             // solana

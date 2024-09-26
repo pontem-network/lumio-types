@@ -1,9 +1,9 @@
 use anyhow::Context;
-use lumio_rpc::{AttributesArtifact, SlotEvents};
 use lumio_types::{
     events::l2::L2Event,
     h256::H256,
     payload::{Payload, SlotPayload},
+    rpc::{AttributesArtifact, SlotEvents},
     Slot,
 };
 use sha3::Digest as _;

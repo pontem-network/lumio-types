@@ -4,7 +4,6 @@ name = "lumio-payload-builder"
 edition.workspace = true
 
 [dependencies]
-lumio-rpc.workspace = true
 lumio-types.workspace = true
 
 anyhow.workspace = true

@@ -11,7 +11,7 @@ pub use ledger::Ledger;
 use std::collections::HashMap;
 
 use anyhow::Error;
-use lumio_rpc::{AttributesArtifact, SlotEvents};
+use lumio_types::rpc::{AttributesArtifact, SlotEvents};
 use lumio_types::{events::l2::L2Event, payload::SlotPayload};
 use service::PayloadService;
 use task::{Task, TaskHandler, TaskId};
