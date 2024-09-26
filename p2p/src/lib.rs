@@ -1,14 +1,10 @@
 use eyre::{Result, WrapErr};
 use futures::prelude::*;
 use libp2p::multiaddr::Multiaddr;
-use libp2p::{
-    gossipsub::{self, IdentTopic},
-    mdns,
-};
+use libp2p::{gossipsub, mdns};
 use lumio_types::rpc::{AttributesArtifact, LumioEvents};
 
 use std::hash::{Hash, Hasher};
-use std::sync::LazyLock;
 use std::time::Duration;
 
 use node_runner::NodeRunner;
@@ -41,6 +37,17 @@ enum SubscribeCommand {
     LumioOpSol(futures::channel::mpsc::Sender<LumioEvents>),
     /// Events from lumio to op-move
     LumioOpMove(futures::channel::mpsc::Sender<LumioEvents>),
+}
+
+impl SubscribeCommand {
+    pub fn topic(&self) -> &gossipsub::IdentTopic {
+        match self {
+            Self::OpMove(_) => &topics::OP_MOVE_EVENTS,
+            Self::OpSol(_) => &topics::OP_SOL_EVENTS,
+            Self::LumioOpSol(_) => &topics::LUMIO_SOL_EVENTS,
+            Self::LumioOpMove(_) => &topics::LUMIO_MOVE_EVENTS,
+        }
+    }
 }
 
 enum SendEventCommand {
@@ -128,11 +135,7 @@ impl Node {
 
         Ok((
             Self { cmd_sender },
-            NodeRunner {
-                swarm,
-                jwt,
-                cmd_receiver,
-            },
+            NodeRunner::new(swarm, jwt, cmd_receiver),
         ))
     }
 
@@ -228,5 +231,9 @@ pub(crate) mod topics {
 
     topic! {
         static AUTH = "auth";
+        static OP_MOVE_EVENTS = "op_move_events";
+        static OP_SOL_EVENTS = "op_sol_events";
+        static LUMIO_SOL_EVENTS = "lumio_sol_events";
+        static LUMIO_MOVE_EVENTS = "lumio_move_events";
     }
 }
