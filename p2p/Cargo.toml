@@ -26,5 +26,7 @@ jsonwebtoken.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 
+lumio-types.workspace = true
+
 [lints]
 workspace = true

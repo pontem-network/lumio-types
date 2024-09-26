@@ -5,6 +5,12 @@ use crate::events::l2::L2Event;
 use crate::payload::Payload;
 use crate::{PayloadId, Slot};
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum LumioEvents {
+    PayloadWithEvents(AttributesArtifact),
+    SyncStatus((PayloadId, PayloadStatus)),
+}
+
 // Copied from here: https://docs.optimism.io/builders/app-developers/transactions/statuses
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum PayloadStatus {

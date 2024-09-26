@@ -2,11 +2,11 @@ use eyre::WrapErr;
 use futures::StreamExt;
 use libp2p::multiaddr::Multiaddr;
 use libp2p::{
-    gossipsub::{self, IdentTopic, TopicHash},
+    gossipsub::{self, IdentTopic},
     mdns,
     swarm::{Swarm, SwarmEvent},
 };
-use serde::{Deserialize, Serialize};
+use lumio_types::rpc::{AttributesArtifact, LumioEvents};
 
 use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
@@ -30,16 +30,6 @@ pub struct Config {
     pub jwt: JwtSecret,
 }
 
-pub type AttributesArtifact = ();
-pub type PayloadId = ();
-pub type PayloadStatus = ();
-
-// TODO: move me to some other crate
-pub enum LumioEvents {
-    PayloadWithEvents(AttributesArtifact),
-    SyncStatus((PayloadId, PayloadStatus)),
-}
-
 enum SubscribeCommand {
     /// Events from op-move to lumio
     OpMove(futures::channel::mpsc::Sender<AttributesArtifact>),
@@ -51,17 +41,30 @@ enum SubscribeCommand {
     LumioOpMove(futures::channel::mpsc::Sender<LumioEvents>),
 }
 
+enum SendEventCommand {
+    /// Events from op-move to lumio
+    OpMove(AttributesArtifact),
+    /// Events from op-sol to lumio
+    OpSol(AttributesArtifact),
+    /// Events from lumio to op-sol
+    LumioOpSol(LumioEvents),
+    /// Events from lumio to op-move
+    LumioOpMove(LumioEvents),
+}
+
 enum Command {
     Subscribe(SubscribeCommand),
+    SendEvent(SendEventCommand),
 }
 
 pub struct Node {
-    // cmd: futures::channel::mpsc::Receiver<Command>,
+    cmd_sender: futures::channel::mpsc::Sender<Command>,
 }
 
 pub struct NodeRunner {
     swarm: Swarm<LumioBehaviour>,
     jwt: JwtSecret,
+    cmd_receiver: futures::channel::mpsc::Receiver<Command>,
 }
 
 static AUTH_TOPIC: LazyLock<IdentTopic> = LazyLock::new(|| IdentTopic::new("/lumio/v1/auth"));
@@ -126,8 +129,16 @@ impl Node {
             .gossipsub
             .publish(AUTH_TOPIC.clone(), jwt.claim()?)
             .context("Failed to auth")?;
+        let (cmd_sender, cmd_receiver) = futures::channel::mpsc::channel(100);
 
-        Ok((Self {}, NodeRunner { swarm, jwt }))
+        Ok((
+            Self { cmd_sender },
+            NodeRunner {
+                swarm,
+                jwt,
+                cmd_receiver,
+            },
+        ))
     }
 }
 
