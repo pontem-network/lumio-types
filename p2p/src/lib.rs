@@ -30,7 +30,34 @@ pub struct Config {
     pub jwt: JwtSecret,
 }
 
-pub struct Node {}
+pub type AttributesArtifact = ();
+pub type PayloadId = ();
+pub type PayloadStatus = ();
+
+// TODO: move me to some other crate
+pub enum LumioEvents {
+    PayloadWithEvents(AttributesArtifact),
+    SyncStatus((PayloadId, PayloadStatus)),
+}
+
+enum SubscribeCommand {
+    /// Events from op-move to lumio
+    OpMove(futures::channel::mpsc::Sender<AttributesArtifact>),
+    /// Events from op-sol to lumio
+    OpSol(futures::channel::mpsc::Sender<AttributesArtifact>),
+    /// Events from lumio to op-sol
+    LumioOpSol(futures::channel::mpsc::Sender<LumioEvents>),
+    /// Events from lumio to op-move
+    LumioOpMove(futures::channel::mpsc::Sender<LumioEvents>),
+}
+
+enum Command {
+    Subscribe(SubscribeCommand),
+}
+
+pub struct Node {
+    // cmd: futures::channel::mpsc::Receiver<Command>,
+}
 
 pub struct NodeRunner {
     swarm: Swarm<LumioBehaviour>,
