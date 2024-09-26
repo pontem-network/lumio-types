@@ -64,8 +64,6 @@ pub struct Node {
     cmd_sender: futures::channel::mpsc::Sender<Command>,
 }
 
-static AUTH_TOPIC: LazyLock<IdentTopic> = LazyLock::new(|| IdentTopic::new("/lumio/v1/auth"));
-
 impl Node {
     pub fn new(cfg: Config) -> eyre::Result<(Self, NodeRunner)> {
         let mut swarm = libp2p::SwarmBuilder::with_new_identity()
@@ -97,7 +95,7 @@ impl Node {
                     gossipsub_config,
                 )?;
 
-                gossipsub.subscribe(&AUTH_TOPIC)?;
+                gossipsub.subscribe(&topics::AUTH)?;
 
                 let mdns = mdns::tokio::Behaviour::new(
                     mdns::Config::default(),
@@ -124,7 +122,7 @@ impl Node {
         swarm
             .behaviour_mut()
             .gossipsub
-            .publish(AUTH_TOPIC.clone(), jwt.claim()?)
+            .publish(topics::AUTH.clone(), jwt.claim()?)
             .context("Failed to auth")?;
         let (cmd_sender, cmd_receiver) = futures::channel::mpsc::channel(100);
 
@@ -212,5 +210,23 @@ impl Node {
             .await
             .context("Node runner is probably dead")?;
         Ok(())
+    }
+}
+
+pub(crate) mod topics {
+    use libp2p::gossipsub::IdentTopic;
+
+    use std::sync::LazyLock;
+
+    macro_rules! topic {
+        ($(static $name:ident = $topic:literal ;)*) => {
+            $(
+                pub static $name: LazyLock<IdentTopic> = LazyLock::new(|| IdentTopic::new(concat!("/lumio/v1/", $topic)));
+            )*
+        }
+    }
+
+    topic! {
+        static AUTH = "auth";
     }
 }

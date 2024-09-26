@@ -1,7 +1,7 @@
 use futures::StreamExt;
 use libp2p::{gossipsub, mdns, swarm::SwarmEvent, Swarm};
 
-use crate::{Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, AUTH_TOPIC};
+use crate::{Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, topics};
 
 pub struct NodeRunner {
     pub(crate) swarm: Swarm<LumioBehaviour>,
@@ -13,7 +13,7 @@ impl NodeRunner {
     // -> !
     pub async fn run(mut self) {
         // Kick it off
-        let auth_topic_hash = AUTH_TOPIC.hash();
+        let auth_topic_hash = topics::AUTH.hash();
         loop {
             futures::select! {
                 event = self.swarm.select_next_some() => match event {
