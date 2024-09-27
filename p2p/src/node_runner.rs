@@ -73,11 +73,11 @@ impl NodeRunner {
                         Command::SendEvent(SendEventCommand::LumioOpMove(ev)) => (topics::LumioMoveEvents::hash(), bincode::serialize(&ev)),
                     };
 
-                    self.swarm
-                        .behaviour_mut()
-                        .gossipsub
-                        .publish(topic.clone(), data.expect("bincode serialization never fails"))
-                        .expect("FIXME");
+                    match self.swarm.behaviour_mut().gossipsub.publish(topic.clone(), data.expect("bincode serialization never fails")) {
+                        // We don't care if there no peers
+                        Ok(_) | Err(gossipsub::PublishError::InsufficientPeers) => (),
+                        Err(err) => panic!("Failed to publish message: {err}"),
+                    }
                 },
                 event = self.swarm.select_next_some() => match event {
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Mdns(mdns::Event::Discovered(list))) => {

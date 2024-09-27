@@ -11,6 +11,7 @@ use node_runner::NodeRunner;
 use topics::Topic;
 
 pub use jwt::JwtSecret;
+pub use libp2p;
 
 mod jwt;
 pub mod node_runner;
@@ -127,11 +128,15 @@ impl Node {
             swarm.dial(a).context("Failed to listen on address")?;
         }
 
-        swarm
+        match swarm
             .behaviour_mut()
             .gossipsub
             .publish(topics::Auth::topic().clone(), jwt.claim()?)
-            .context("Failed to auth")?;
+        {
+            // We don't care if there no peers
+            Ok(_) | Err(gossipsub::PublishError::InsufficientPeers) => (),
+            Err(err) => return Err(err).context("Failed to auth"),
+        }
         let (cmd_sender, cmd_receiver) = futures::channel::mpsc::channel(100);
 
         Ok((
@@ -251,7 +256,7 @@ pub(crate) mod topics {
         struct Auth("auth");
         struct OpMoveEvents("op_move_events");
         struct OpSolEvents("op_sol_events");
-        struct LumioSolEvents("lumiop_sol_events");
+        struct LumioSolEvents("lumio_sol_events");
         struct LumioMoveEvents("lumio_move_events");
     }
 }
