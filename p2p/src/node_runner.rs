@@ -108,7 +108,44 @@ impl NodeRunner {
                                 let Err(err) = self.authorize(source, data) else { continue };
                                 tracing::debug!("Failed to auth peer {source}: {err:?}");
                             }
-                            (topic, _) => tracing::debug!(?topic, "Ignoring message from unknown topic"),
+                            (t, true) if t == *topics::OpMoveEvents::hash() => {
+                                let ch = self.op_move_events.as_mut().expect("We should always have a channel if we subscribed to topic");
+                                let Ok(msg) = bincode::deserialize(&*data) else {
+                                    tracing::debug!("Failed to decode op move event. Skipping...");
+                                    continue;
+                                };
+
+                                let _ = ch.send(msg).await;
+                            }
+                            (t, true) if t == *topics::OpSolEvents::hash() => {
+                                let ch = self.op_sol_events.as_mut().expect("We should always have a channel if we subscribed to topic");
+                                let Ok(msg) = bincode::deserialize(&*data) else {
+                                    tracing::debug!("Failed to decode op sol event. Skipping...");
+                                    continue;
+                                };
+
+                                let _ = ch.send(msg).await;
+                            }
+                            (t, true) if t == *topics::LumioSolEvents::hash() => {
+                                let ch = self.lumio_sol_events.as_mut().expect("We should always have a channel if we subscribed to topic");
+                                let Ok(msg) = bincode::deserialize(&*data) else {
+                                    tracing::debug!("Failed to decode lumio sol event. Skipping...");
+                                    continue;
+                                };
+
+                                let _ = ch.send(msg).await;
+                            }
+                            (t, true) if t == *topics::LumioMoveEvents::hash() => {
+                                let ch = self.lumio_move_events.as_mut().expect("We should always have a channel if we subscribed to topic");
+                                let Ok(msg) = bincode::deserialize(&*data) else {
+                                    tracing::debug!("Failed to decode lumio move event. Skipping...");
+                                    continue;
+                                };
+
+                                let _ = ch.send(msg).await;
+                            }
+                            (_, false) => tracing::trace!(?source, "Ignoring message from unauthorized"),
+                            (topic, true) => tracing::debug!(?topic, "Ignoring message from unknown topic"),
                         }
                     },
                     SwarmEvent::NewListenAddr { address, .. } => {
