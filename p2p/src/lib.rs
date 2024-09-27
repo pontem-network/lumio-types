@@ -8,6 +8,7 @@ use std::hash::{Hash, Hasher};
 use std::time::Duration;
 
 use node_runner::NodeRunner;
+use topics::Topic;
 
 pub use jwt::JwtSecret;
 
@@ -42,10 +43,10 @@ enum SubscribeCommand {
 impl SubscribeCommand {
     pub fn topic(&self) -> &gossipsub::IdentTopic {
         match self {
-            Self::OpMove(_) => &topics::OP_MOVE_EVENTS,
-            Self::OpSol(_) => &topics::OP_SOL_EVENTS,
-            Self::LumioOpSol(_) => &topics::LUMIO_SOL_EVENTS,
-            Self::LumioOpMove(_) => &topics::LUMIO_MOVE_EVENTS,
+            Self::OpMove(_) => &topics::OpMoveEvents::topic(),
+            Self::OpSol(_) => &topics::OpSolEvents::topic(),
+            Self::LumioOpSol(_) => &topics::LumioSolEvents::topic(),
+            Self::LumioOpMove(_) => &topics::LumioMoveEvents::topic(),
         }
     }
 }
@@ -102,7 +103,7 @@ impl Node {
                     gossipsub_config,
                 )?;
 
-                gossipsub.subscribe(&topics::AUTH)?;
+                gossipsub.subscribe(topics::Auth::topic())?;
 
                 let mdns = mdns::tokio::Behaviour::new(
                     mdns::Config::default(),
@@ -129,7 +130,7 @@ impl Node {
         swarm
             .behaviour_mut()
             .gossipsub
-            .publish(topics::AUTH.clone(), jwt.claim()?)
+            .publish(topics::Auth::topic().clone(), jwt.claim()?)
             .context("Failed to auth")?;
         let (cmd_sender, cmd_receiver) = futures::channel::mpsc::channel(100);
 
@@ -217,23 +218,40 @@ impl Node {
 }
 
 pub(crate) mod topics {
-    use libp2p::gossipsub::IdentTopic;
+    use libp2p::gossipsub::{IdentTopic, TopicHash};
 
     use std::sync::LazyLock;
 
+    pub trait Topic {
+        fn topic() -> &'static IdentTopic;
+
+        fn hash() -> &'static TopicHash;
+    }
+
     macro_rules! topic {
-        ($(static $name:ident = $topic:literal ;)*) => {
-            $(
-                pub static $name: LazyLock<IdentTopic> = LazyLock::new(|| IdentTopic::new(concat!("/lumio/v1/", $topic)));
-            )*
-        }
+        ( $(struct $name:ident($topic:literal) ;)* ) => {$(
+            pub struct $name;
+
+            impl Topic for $name {
+                fn topic() -> &'static IdentTopic {
+                    #[allow(non_upper_case_globals)]
+                    static $name: LazyLock<IdentTopic> = LazyLock::new(|| IdentTopic::new(concat!("/lumio/v1/", $topic)));
+                    &$name
+                }
+                fn hash() -> &'static TopicHash {
+                    #[allow(non_upper_case_globals)]
+                    static $name: LazyLock<TopicHash> = LazyLock::new(|| $name::topic().hash());
+                    &$name
+                }
+            }
+        )*}
     }
 
     topic! {
-        static AUTH = "auth";
-        static OP_MOVE_EVENTS = "op_move_events";
-        static OP_SOL_EVENTS = "op_sol_events";
-        static LUMIO_SOL_EVENTS = "lumio_sol_events";
-        static LUMIO_MOVE_EVENTS = "lumio_move_events";
+        struct Auth("auth");
+        struct OpMoveEvents("op_move_events");
+        struct OpSolEvents("op_sol_events");
+        struct LumioSolEvents("lumiop_sol_events");
+        struct LumioMoveEvents("lumio_move_events");
     }
 }

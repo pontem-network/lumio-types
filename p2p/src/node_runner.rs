@@ -1,10 +1,11 @@
 use eyre::{Result, WrapErr};
-use futures::StreamExt;
+use futures::prelude::*;
 use libp2p::{gossipsub, mdns, swarm::SwarmEvent, PeerId, Swarm};
 use lumio_types::rpc::{AttributesArtifact, LumioEvents};
 
 use std::collections::HashSet;
 
+use crate::topics::Topic;
 use crate::{topics, Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, SubscribeCommand};
 
 pub struct NodeRunner {
@@ -42,7 +43,6 @@ impl NodeRunner {
     // -> !
     pub async fn run(mut self) {
         // Kick it off
-        let auth_topic_hash = topics::AUTH.hash();
         loop {
             futures::select! {
                 cmd = self.cmd_receiver.next() => {
@@ -78,7 +78,7 @@ impl NodeRunner {
                         let result = self.swarm
                             .behaviour_mut()
                             .gossipsub
-                            .publish(topics::AUTH.clone(), claim);
+                            .publish(topics::Auth::topic().clone(), claim);
                         if let Err(err) = result {
                             tracing::debug!(?err, "Failed to send auth message because of new peer");
                         }
@@ -104,7 +104,7 @@ impl NodeRunner {
                         };
 
                         match (topic, self.authorized.contains(&source)) {
-                            (t, _) if t == auth_topic_hash => {
+                            (t, _) if t == *topics::Auth::hash() => {
                                 let Err(err) = self.authorize(source, data) else { continue };
                                 tracing::debug!("Failed to auth peer {source}: {err:?}");
                             }
