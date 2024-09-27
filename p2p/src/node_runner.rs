@@ -6,7 +6,10 @@ use lumio_types::rpc::{AttributesArtifact, LumioEvents};
 use std::collections::HashSet;
 
 use crate::topics::Topic;
-use crate::{topics, Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, SubscribeCommand};
+use crate::{
+    topics, Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, SendEventCommand,
+    SubscribeCommand,
+};
 
 pub struct NodeRunner {
     swarm: Swarm<LumioBehaviour>,
@@ -49,7 +52,7 @@ impl NodeRunner {
                     // If no listeners then we exit
                     let Some(cmd) = cmd else { return; };
 
-                    match cmd {
+                    let (topic, data) = match cmd {
                         Command::Subscribe(cmd) => {
                             self.swarm
                                 .behaviour_mut()
@@ -62,9 +65,19 @@ impl NodeRunner {
                                 SubscribeCommand::LumioOpSol(sender) => self.lumio_sol_events = Some(sender),
                                 SubscribeCommand::LumioOpMove(sender) => self.lumio_move_events = Some(sender),
                             }
+                            continue;
                         }
-                        _ => todo!(),
-                    }
+                        Command::SendEvent(SendEventCommand::OpMove(art)) => (topics::OpMoveEvents::hash(), bincode::serialize(&art)),
+                        Command::SendEvent(SendEventCommand::OpSol(art)) => (topics::OpSolEvents::hash(), bincode::serialize(&art)),
+                        Command::SendEvent(SendEventCommand::LumioOpSol(ev)) => (topics::LumioSolEvents::hash(), bincode::serialize(&ev)),
+                        Command::SendEvent(SendEventCommand::LumioOpMove(ev)) => (topics::LumioMoveEvents::hash(), bincode::serialize(&ev)),
+                    };
+
+                    self.swarm
+                        .behaviour_mut()
+                        .gossipsub
+                        .publish(topic.clone(), data.expect("bincode serialization never fails"))
+                        .expect("FIXME");
                 },
                 event = self.swarm.select_next_some() => match event {
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Mdns(mdns::Event::Discovered(list))) => {
