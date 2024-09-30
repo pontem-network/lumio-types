@@ -1,4 +1,5 @@
 use futures::prelude::*;
+use tracing::Instrument;
 use lumio_p2p::{libp2p::Multiaddr, Config, JwtSecret, Node};
 use lumio_types::rpc::{LumioEvents, PayloadStatus};
 
@@ -15,7 +16,7 @@ async fn simple() {
     })
     .unwrap();
 
-    tokio::spawn(runner.run());
+    tokio::spawn(runner.run().instrument(tracing::trace_span!("alpha")));
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
@@ -25,9 +26,14 @@ async fn simple() {
         jwt,
     })
     .unwrap();
-    tokio::spawn(runner.run());
+    tokio::spawn(runner.run().instrument(tracing::trace_span!("beta")));
+
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     let mut op_sol_events = node1.subscribe_lumio_op_sol_events().await.unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
     node2
         .send_lumio_op_sol(LumioEvents::SyncStatus((0, PayloadStatus::Pending)))
         .await

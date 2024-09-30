@@ -79,13 +79,24 @@ impl NodeRunner {
                         Err(err) => panic!("Failed to publish message: {err}"),
                     }
                 },
-                event = self.swarm.select_next_some() => match event {
+                event = self.swarm.select_next_some() => match dbg!(event) {
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Mdns(mdns::Event::Discovered(list))) => {
                         for (peer_id, multiaddr) in list {
                             tracing::debug!(?peer_id, %multiaddr, "mDNS discovered a new peer");
                             self.swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
                         }
-
+                    },
+                    SwarmEvent::Behaviour(LumioBehaviourEvent::Mdns(mdns::Event::Expired(list))) => {
+                        for (peer_id, multiaddr) in list {
+                            tracing::debug!(?peer_id, %multiaddr, "mDNS discover peer has expired");
+                            self.swarm.behaviour_mut().gossipsub.remove_explicit_peer(&peer_id);
+                        }
+                    },
+                    SwarmEvent::Behaviour(LumioBehaviourEvent::Gossipsub(gossipsub::Event::Subscribed {
+                        topic,
+                        ..
+                    })) if topic == *topics::Auth::hash() => {
+                        tracing::debug!("Authorizing here");
                         // AUTH for as there are new peers
                         let claim = self.jwt.claim().expect("Encoding JWT never fails");
                         let result = self.swarm
@@ -95,13 +106,8 @@ impl NodeRunner {
                         if let Err(err) = result {
                             tracing::debug!(?err, "Failed to send auth message because of new peer");
                         }
-                    },
-                    SwarmEvent::Behaviour(LumioBehaviourEvent::Mdns(mdns::Event::Expired(list))) => {
-                        for (peer_id, multiaddr) in list {
-                            tracing::debug!(?peer_id, %multiaddr, "mDNS discover peer has expired");
-                            self.swarm.behaviour_mut().gossipsub.remove_explicit_peer(&peer_id);
-                        }
-                    },
+                        tracing::info!("Should be autorized");
+                    }
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Gossipsub(gossipsub::Event::Message {
                         message: libp2p::gossipsub::Message {
                             data,
@@ -115,6 +121,7 @@ impl NodeRunner {
                             tracing::debug!(?topic, "Ignoring message as sender is unknown");
                             continue
                         };
+                        tracing::debug!(is_auth = (topic == *topics::Auth::hash()));
 
                         match (topic, self.authorized.contains(&source)) {
                             (t, _) if t == *topics::Auth::hash() => {

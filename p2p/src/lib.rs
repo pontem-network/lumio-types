@@ -104,8 +104,6 @@ impl Node {
                     gossipsub_config,
                 )?;
 
-                gossipsub.subscribe(topics::Auth::topic())?;
-
                 let mdns = mdns::tokio::Behaviour::new(
                     mdns::Config::default(),
                     key.public().to_peer_id(),
@@ -125,16 +123,20 @@ impl Node {
             swarm.listen_on(a).context("Failed to listen on address")?;
         }
         for a in bootstrap_addresses {
-            swarm.dial(a).context("Failed to listen on address")?;
+            swarm.dial(a).context("Failed to dial address")?;
         }
 
+        swarm.behaviour_mut().gossipsub.subscribe(topics::Auth::topic())?;
+
+        tracing::info!("Publish");
         match swarm
             .behaviour_mut()
             .gossipsub
             .publish(topics::Auth::topic().clone(), jwt.claim()?)
         {
             // We don't care if there no peers
-            Ok(_) | Err(gossipsub::PublishError::InsufficientPeers) => (),
+            Ok(_) => (),
+            Err(gossipsub::PublishError::InsufficientPeers) => tracing::debug!("No peers for auth"),
             Err(err) => return Err(err).context("Failed to auth"),
         }
         let (cmd_sender, cmd_receiver) = futures::channel::mpsc::channel(100);
