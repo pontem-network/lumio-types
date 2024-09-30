@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::anyhow;
+use eyre::eyre;
 use borsh::{BorshDeserialize, BorshSerialize};
 use derive_more::{AsRef, From, Into};
 use serde::{Deserialize, Serialize};
@@ -44,7 +44,7 @@ impl H256 {
 }
 
 impl FromStr for H256 {
-    type Err = anyhow::Error;
+    type Err = eyre::Error;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let mut array = [0; 32];
@@ -64,7 +64,7 @@ impl FromStr for H256 {
                 array = bs58::decode(s)
                     .into_vec()?
                     .try_into()
-                    .map_err(|_| anyhow!("invalid address length"))?;
+                    .map_err(|_| eyre!("invalid address length"))?;
             }
         };
 

@@ -1,0 +1,18 @@
+[package]
+name = "lumio-engine"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+eyre.workspace = true
+lumio-types.workspace = true
+serde.workspace = true
+tokio.workspace = true
+log.workspace = true
+
+[lints]
+workspace = true
