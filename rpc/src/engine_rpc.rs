@@ -1,7 +1,7 @@
 use jsonrpsee::{proc_macros::rpc, types::ErrorObjectOwned};
 use lumio_types::{
-    events::{l1::L1Event, l2::L2Event},
     payload::Payload,
+    rpc::{AttributesArtifact, PayloadAttrs, PayloadStatus},
     Hash, PayloadId, Slot, Version,
 };
 use serde::{Deserialize, Serialize};
@@ -33,42 +33,6 @@ pub trait L2EngineApi {
         id: PayloadId,
         status: PayloadStatus,
     ) -> Result<(), ErrorObjectOwned>;
-}
-
-// Copied from here: https://docs.optimism.io/builders/app-developers/transactions/statuses
-#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum PayloadStatus {
-    /// By default
-    #[default]
-    Pending,
-    /// Given away to sequencer
-    Unsafe,
-    /// Sent to L1/DA
-    Safe,
-    /// Finalized on L1/DA
-    L1Finalized,
-    /// Wasn't disputed
-    Finalized,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct PayloadAttrs {
-    pub parent_payload: PayloadId,
-    pub events: Vec<SlotEvents<L1Event>>,
-    /// Max payload size in bytes.
-    pub max_payload_size: u32,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AttributesArtifact {
-    pub payload: Payload,
-    pub events: Vec<SlotEvents<L2Event>>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct SlotEvents<E> {
-    pub slot: Slot,
-    pub events: Vec<E>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

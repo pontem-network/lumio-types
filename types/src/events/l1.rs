@@ -23,4 +23,3 @@ pub enum SplL1Event {
         amount: u64,
     },
 }
-

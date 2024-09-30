@@ -1,0 +1,45 @@
+[package]
+name = "lumio-p2p"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+bincode.workspace = true
+eyre.workspace = true
+futures.workspace = true
+libp2p = { workspace = true, features = [
+  "gossipsub",
+  "macros",
+  "mdns",
+  "noise",
+  "quic",
+  "serde",
+  "tcp",
+  "tokio",
+  "yamux",
+] }
+tracing.workspace = true
+hex.workspace = true
+rand.workspace = true
+jsonwebtoken.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "macros"] }
+tokio-stream.workspace = true
+
+lumio-types.workspace = true
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true, features = [
+  "ansi",
+  "env-filter",
+  "fmt",
+  "tracing-log",
+] }
+tokio = { workspace = true, features = ["test-util", "macros"] }
+
+[lints]
+workspace = true
