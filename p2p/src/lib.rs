@@ -44,10 +44,10 @@ enum SubscribeCommand {
 impl SubscribeCommand {
     pub fn topic(&self) -> &gossipsub::IdentTopic {
         match self {
-            Self::OpMove(_) => &topics::OpMoveEvents::topic(),
-            Self::OpSol(_) => &topics::OpSolEvents::topic(),
-            Self::LumioOpSol(_) => &topics::LumioSolEvents::topic(),
-            Self::LumioOpMove(_) => &topics::LumioMoveEvents::topic(),
+            Self::OpMove(_) => topics::OpMoveEvents::topic(),
+            Self::OpSol(_) => topics::OpSolEvents::topic(),
+            Self::LumioOpSol(_) => topics::LumioSolEvents::topic(),
+            Self::LumioOpMove(_) => topics::LumioMoveEvents::topic(),
         }
     }
 }

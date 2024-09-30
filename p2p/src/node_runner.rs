@@ -105,7 +105,7 @@ impl NodeRunner {
                         ..
                     })) if topic == *topics::Auth::hash() => {
                         let auth = bincode::serialize(&Auth {
-                            peer_id: self.swarm.local_peer_id().clone(),
+                            peer_id: *self.swarm.local_peer_id(),
                             claim: self.jwt.claim().expect("Encoding JWT never fails"),
                         })
                         .expect("bincode ser never fails");
@@ -135,7 +135,7 @@ impl NodeRunner {
 
                         match (topic, self.authorized.contains(&source)) {
                             (t, _) if t == *topics::Auth::hash() => {
-                                let Ok(Auth { peer_id, claim }) = bincode::deserialize(&*data) else {
+                                let Ok(Auth { peer_id, claim }) = bincode::deserialize(&data) else {
                                     tracing::debug!("Failed to decode op move event. Skipping...");
                                     continue;
                                 };
@@ -145,7 +145,7 @@ impl NodeRunner {
                             }
                             (t, true) if t == *topics::OpMoveEvents::hash() => {
                                 let ch = self.op_move_events.as_mut().expect("We should always have a channel if we subscribed to topic");
-                                let Ok(msg) = bincode::deserialize(&*data) else {
+                                let Ok(msg) = bincode::deserialize(&data) else {
                                     tracing::debug!("Failed to decode op move event. Skipping...");
                                     continue;
                                 };
@@ -154,7 +154,7 @@ impl NodeRunner {
                             }
                             (t, true) if t == *topics::OpSolEvents::hash() => {
                                 let ch = self.op_sol_events.as_mut().expect("We should always have a channel if we subscribed to topic");
-                                let Ok(msg) = bincode::deserialize(&*data) else {
+                                let Ok(msg) = bincode::deserialize(&data) else {
                                     tracing::debug!("Failed to decode op sol event. Skipping...");
                                     continue;
                                 };
@@ -163,7 +163,7 @@ impl NodeRunner {
                             }
                             (t, true) if t == *topics::LumioSolEvents::hash() => {
                                 let ch = self.lumio_sol_events.as_mut().expect("We should always have a channel if we subscribed to topic");
-                                let Ok(msg) = bincode::deserialize(&*data) else {
+                                let Ok(msg) = bincode::deserialize(&data) else {
                                     tracing::debug!("Failed to decode lumio sol event. Skipping...");
                                     continue;
                                 };
@@ -172,7 +172,7 @@ impl NodeRunner {
                             }
                             (t, true) if t == *topics::LumioMoveEvents::hash() => {
                                 let ch = self.lumio_move_events.as_mut().expect("We should always have a channel if we subscribed to topic");
-                                let Ok(msg) = bincode::deserialize(&*data) else {
+                                let Ok(msg) = bincode::deserialize(&data) else {
                                     tracing::debug!("Failed to decode lumio move event. Skipping...");
                                     continue;
                                 };
