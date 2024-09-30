@@ -90,6 +90,83 @@ impl NodeRunner {
         }
     }
 
+    async fn handle_message(&mut self, msg: libp2p::gossipsub::Message) {
+        let libp2p::gossipsub::Message {
+            data,
+            topic,
+            source,
+            ..
+        } = msg;
+        let Some(source) = source else {
+            tracing::debug!(?topic, "Ignoring message as sender is unknown");
+            return;
+        };
+
+        match (topic, self.authorized.contains(&source)) {
+            (t, _) if t == *topics::Auth::hash() => {
+                let Ok(Auth { peer_id, claim }) = bincode::deserialize(&data) else {
+                    tracing::debug!("Failed to decode op move event. Skipping...");
+                    return;
+                };
+
+                let Err(err) = self.authorize(peer_id, claim) else {
+                    return;
+                };
+                tracing::debug!("Failed to auth peer {source}: {err:?}");
+            }
+            (t, true) if t == *topics::OpMoveEvents::hash() => {
+                let ch = self
+                    .op_move_events
+                    .as_mut()
+                    .expect("We should always have a channel if we subscribed to topic");
+                let Ok(msg) = bincode::deserialize(&data) else {
+                    tracing::debug!("Failed to decode op move event. Skipping...");
+                    return;
+                };
+
+                let _ = ch.send(msg).await;
+            }
+            (t, true) if t == *topics::OpSolEvents::hash() => {
+                let ch = self
+                    .op_sol_events
+                    .as_mut()
+                    .expect("We should always have a channel if we subscribed to topic");
+                let Ok(msg) = bincode::deserialize(&data) else {
+                    tracing::debug!("Failed to decode op sol event. Skipping...");
+                    return;
+                };
+
+                let _ = ch.send(msg).await;
+            }
+            (t, true) if t == *topics::LumioSolEvents::hash() => {
+                let ch = self
+                    .lumio_sol_events
+                    .as_mut()
+                    .expect("We should always have a channel if we subscribed to topic");
+                let Ok(msg) = bincode::deserialize(&data) else {
+                    tracing::debug!("Failed to decode lumio sol event. Skipping...");
+                    return;
+                };
+
+                let _ = ch.send(msg).await;
+            }
+            (t, true) if t == *topics::LumioMoveEvents::hash() => {
+                let ch = self
+                    .lumio_move_events
+                    .as_mut()
+                    .expect("We should always have a channel if we subscribed to topic");
+                let Ok(msg) = bincode::deserialize(&data) else {
+                    tracing::debug!("Failed to decode lumio move event. Skipping...");
+                    return;
+                };
+
+                let _ = ch.send(msg).await;
+            }
+            (_, false) => tracing::trace!(?source, "Ignoring message from unauthorized"),
+            (topic, true) => tracing::debug!(?topic, "Ignoring message from unknown topic"),
+        }
+    }
+
     #[tracing::instrument(skip_all, fields(peer_id = %self.swarm.local_peer_id()))]
     pub async fn run(mut self) {
         // Kick it off
@@ -134,69 +211,9 @@ impl NodeRunner {
                         }
                     }
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Gossipsub(gossipsub::Event::Message {
-                        message: libp2p::gossipsub::Message {
-                            data,
-                            topic,
-                            source,
-                            ..
-                        },
+                        message,
                         ..
-                    })) => {
-                        let Some(source) = source else {
-                            tracing::debug!(?topic, "Ignoring message as sender is unknown");
-                            continue
-                        };
-
-                        match (topic, self.authorized.contains(&source)) {
-                            (t, _) if t == *topics::Auth::hash() => {
-                                let Ok(Auth { peer_id, claim }) = bincode::deserialize(&data) else {
-                                    tracing::debug!("Failed to decode op move event. Skipping...");
-                                    continue;
-                                };
-
-                                let Err(err) = self.authorize(peer_id, claim) else { continue };
-                                tracing::debug!("Failed to auth peer {source}: {err:?}");
-                            }
-                            (t, true) if t == *topics::OpMoveEvents::hash() => {
-                                let ch = self.op_move_events.as_mut().expect("We should always have a channel if we subscribed to topic");
-                                let Ok(msg) = bincode::deserialize(&data) else {
-                                    tracing::debug!("Failed to decode op move event. Skipping...");
-                                    continue;
-                                };
-
-                                let _ = ch.send(msg).await;
-                            }
-                            (t, true) if t == *topics::OpSolEvents::hash() => {
-                                let ch = self.op_sol_events.as_mut().expect("We should always have a channel if we subscribed to topic");
-                                let Ok(msg) = bincode::deserialize(&data) else {
-                                    tracing::debug!("Failed to decode op sol event. Skipping...");
-                                    continue;
-                                };
-
-                                let _ = ch.send(msg).await;
-                            }
-                            (t, true) if t == *topics::LumioSolEvents::hash() => {
-                                let ch = self.lumio_sol_events.as_mut().expect("We should always have a channel if we subscribed to topic");
-                                let Ok(msg) = bincode::deserialize(&data) else {
-                                    tracing::debug!("Failed to decode lumio sol event. Skipping...");
-                                    continue;
-                                };
-
-                                let _ = ch.send(msg).await;
-                            }
-                            (t, true) if t == *topics::LumioMoveEvents::hash() => {
-                                let ch = self.lumio_move_events.as_mut().expect("We should always have a channel if we subscribed to topic");
-                                let Ok(msg) = bincode::deserialize(&data) else {
-                                    tracing::debug!("Failed to decode lumio move event. Skipping...");
-                                    continue;
-                                };
-
-                                let _ = ch.send(msg).await;
-                            }
-                            (_, false) => tracing::trace!(?source, "Ignoring message from unauthorized"),
-                            (topic, true) => tracing::debug!(?topic, "Ignoring message from unknown topic"),
-                        }
-                    },
+                    })) => self.handle_message(message).await,
                     SwarmEvent::NewListenAddr { address, .. } => tracing::debug!("Local node is listening on {address}"),
                     event => tracing::trace!(?event),
                 }
