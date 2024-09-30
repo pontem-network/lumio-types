@@ -57,7 +57,9 @@ impl NodeRunner {
                     .behaviour_mut()
                     .gossipsub
                     .subscribe(cmd.topic())
-                    .expect("FIXME");
+                    .expect(
+                        "Something went terribly wrong, as we failed to subscribe to some topic",
+                    );
                 match cmd {
                     SubscribeCommand::OpMove(sender) => self.op_move_events = Some(sender),
                     SubscribeCommand::OpSol(sender) => self.op_sol_events = Some(sender),
