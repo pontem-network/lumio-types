@@ -27,6 +27,8 @@ rand.workspace = true
 jsonwebtoken.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "macros"] }
+tokio-stream.workspace = true
 
 lumio-types.workspace = true
 

@@ -34,13 +34,13 @@ pub struct Config {
 
 enum SubscribeCommand {
     /// Events from op-move to lumio
-    OpMove(futures::channel::mpsc::Sender<AttributesArtifact>),
+    OpMove(tokio::sync::mpsc::Sender<AttributesArtifact>),
     /// Events from op-sol to lumio
-    OpSol(futures::channel::mpsc::Sender<AttributesArtifact>),
+    OpSol(tokio::sync::mpsc::Sender<AttributesArtifact>),
     /// Events from lumio to op-sol
-    LumioOpSol(futures::channel::mpsc::Sender<LumioEvents>),
+    LumioOpSol(tokio::sync::mpsc::Sender<LumioEvents>),
     /// Events from lumio to op-move
-    LumioOpMove(futures::channel::mpsc::Sender<LumioEvents>),
+    LumioOpMove(tokio::sync::mpsc::Sender<LumioEvents>),
 }
 
 impl SubscribeCommand {
@@ -72,7 +72,7 @@ enum Command {
 
 #[derive(Debug, Clone)]
 pub struct Node {
-    cmd_sender: futures::channel::mpsc::Sender<Command>,
+    cmd_sender: tokio::sync::mpsc::Sender<Command>,
 }
 
 impl Node {
@@ -143,7 +143,7 @@ impl Node {
             Err(gossipsub::PublishError::InsufficientPeers) => tracing::warn!("No peers for auth"),
             Err(err) => return Err(err).context("Failed to auth"),
         }
-        let (cmd_sender, cmd_receiver) = futures::channel::mpsc::channel(100);
+        let (cmd_sender, cmd_receiver) = tokio::sync::mpsc::channel(100);
 
         Ok((
             Self { cmd_sender },
@@ -154,45 +154,45 @@ impl Node {
     pub async fn subscribe_op_move_events(
         &mut self,
     ) -> Result<impl Stream<Item = AttributesArtifact> + Unpin + 'static> {
-        let (sender, receiver) = futures::channel::mpsc::channel(10);
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
         self.cmd_sender
             .send(Command::Subscribe(SubscribeCommand::OpMove(sender)))
             .await
             .context("Node runner is probably dead")?;
-        Ok(receiver)
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
     pub async fn subscribe_op_sol_events(
         &mut self,
     ) -> Result<impl Stream<Item = AttributesArtifact> + Unpin + 'static> {
-        let (sender, receiver) = futures::channel::mpsc::channel(10);
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
         self.cmd_sender
             .send(Command::Subscribe(SubscribeCommand::OpSol(sender)))
             .await
             .context("Node runner is probably dead")?;
-        Ok(receiver)
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
     pub async fn subscribe_lumio_op_sol_events(
         &mut self,
     ) -> Result<impl Stream<Item = LumioEvents> + Unpin + 'static> {
-        let (sender, receiver) = futures::channel::mpsc::channel(20);
+        let (sender, receiver) = tokio::sync::mpsc::channel(20);
         self.cmd_sender
             .send(Command::Subscribe(SubscribeCommand::LumioOpSol(sender)))
             .await
             .context("Node runner is probably dead")?;
-        Ok(receiver)
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
     pub async fn subscribe_lumio_op_move_events(
         &mut self,
     ) -> Result<impl Stream<Item = LumioEvents> + Unpin + 'static> {
-        let (sender, receiver) = futures::channel::mpsc::channel(20);
+        let (sender, receiver) = tokio::sync::mpsc::channel(20);
         self.cmd_sender
             .send(Command::Subscribe(SubscribeCommand::LumioOpMove(sender)))
             .await
             .context("Node runner is probably dead")?;
-        Ok(receiver)
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
     pub async fn send_lumio_op_move(&mut self, events: LumioEvents) -> Result<()> {

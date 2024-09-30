@@ -15,14 +15,14 @@ use crate::{
 pub struct NodeRunner {
     swarm: Swarm<LumioBehaviour>,
     jwt: JwtSecret,
-    cmd_receiver: futures::channel::mpsc::Receiver<Command>,
+    cmd_receiver: tokio::sync::mpsc::Receiver<Command>,
 
     authorized: HashSet<PeerId>,
 
-    op_move_events: Option<futures::channel::mpsc::Sender<AttributesArtifact>>,
-    op_sol_events: Option<futures::channel::mpsc::Sender<AttributesArtifact>>,
-    lumio_sol_events: Option<futures::channel::mpsc::Sender<LumioEvents>>,
-    lumio_move_events: Option<futures::channel::mpsc::Sender<LumioEvents>>,
+    op_move_events: Option<tokio::sync::mpsc::Sender<AttributesArtifact>>,
+    op_sol_events: Option<tokio::sync::mpsc::Sender<AttributesArtifact>>,
+    lumio_sol_events: Option<tokio::sync::mpsc::Sender<LumioEvents>>,
+    lumio_move_events: Option<tokio::sync::mpsc::Sender<LumioEvents>>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -35,7 +35,7 @@ impl NodeRunner {
     pub(crate) fn new(
         swarm: Swarm<LumioBehaviour>,
         jwt: JwtSecret,
-        cmd_receiver: futures::channel::mpsc::Receiver<Command>,
+        cmd_receiver: tokio::sync::mpsc::Receiver<Command>,
     ) -> Self {
         Self {
             swarm,
@@ -173,8 +173,8 @@ impl NodeRunner {
     pub async fn run(mut self) {
         // Kick it off
         loop {
-            futures::select! {
-                cmd = self.cmd_receiver.next() => {
+            tokio::select! {
+                cmd = self.cmd_receiver.recv() => {
                     // If no listeners then we exit
                     let Some(cmd) = cmd else { return; };
                     self.handle_command(cmd)
