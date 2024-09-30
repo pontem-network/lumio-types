@@ -50,6 +50,46 @@ impl NodeRunner {
         }
     }
 
+    fn handle_command(&mut self, cmd: Command) {
+        let (topic, data) = match cmd {
+            Command::Subscribe(cmd) => {
+                self.swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .subscribe(cmd.topic())
+                    .expect("FIXME");
+                match cmd {
+                    SubscribeCommand::OpMove(sender) => self.op_move_events = Some(sender),
+                    SubscribeCommand::OpSol(sender) => self.op_sol_events = Some(sender),
+                    SubscribeCommand::LumioOpSol(sender) => self.lumio_sol_events = Some(sender),
+                    SubscribeCommand::LumioOpMove(sender) => self.lumio_move_events = Some(sender),
+                }
+                return;
+            }
+            Command::SendEvent(SendEventCommand::OpMove(art)) => {
+                (topics::OpMoveEvents::hash(), bincode::serialize(&art))
+            }
+            Command::SendEvent(SendEventCommand::OpSol(art)) => {
+                (topics::OpSolEvents::hash(), bincode::serialize(&art))
+            }
+            Command::SendEvent(SendEventCommand::LumioOpSol(ev)) => {
+                (topics::LumioSolEvents::hash(), bincode::serialize(&ev))
+            }
+            Command::SendEvent(SendEventCommand::LumioOpMove(ev)) => {
+                (topics::LumioMoveEvents::hash(), bincode::serialize(&ev))
+            }
+        };
+
+        match self.swarm.behaviour_mut().gossipsub.publish(
+            topic.clone(),
+            data.expect("bincode serialization never fails"),
+        ) {
+            // We don't care if there no peers
+            Ok(_) | Err(gossipsub::PublishError::InsufficientPeers) => (),
+            Err(err) => panic!("Failed to publish message: {err}"),
+        }
+    }
+
     #[tracing::instrument(skip_all, fields(peer_id = %self.swarm.local_peer_id()))]
     pub async fn run(mut self) {
         // Kick it off
@@ -58,34 +98,8 @@ impl NodeRunner {
                 cmd = self.cmd_receiver.next() => {
                     // If no listeners then we exit
                     let Some(cmd) = cmd else { return; };
-
-                    let (topic, data) = match cmd {
-                        Command::Subscribe(cmd) => {
-                            self.swarm
-                                .behaviour_mut()
-                                .gossipsub
-                                .subscribe(cmd.topic())
-                                .expect("FIXME");
-                            match cmd {
-                                SubscribeCommand::OpMove(sender) => self.op_move_events = Some(sender),
-                                SubscribeCommand::OpSol(sender) => self.op_sol_events = Some(sender),
-                                SubscribeCommand::LumioOpSol(sender) => self.lumio_sol_events = Some(sender),
-                                SubscribeCommand::LumioOpMove(sender) => self.lumio_move_events = Some(sender),
-                            }
-                            continue;
-                        }
-                        Command::SendEvent(SendEventCommand::OpMove(art)) => (topics::OpMoveEvents::hash(), bincode::serialize(&art)),
-                        Command::SendEvent(SendEventCommand::OpSol(art)) => (topics::OpSolEvents::hash(), bincode::serialize(&art)),
-                        Command::SendEvent(SendEventCommand::LumioOpSol(ev)) => (topics::LumioSolEvents::hash(), bincode::serialize(&ev)),
-                        Command::SendEvent(SendEventCommand::LumioOpMove(ev)) => (topics::LumioMoveEvents::hash(), bincode::serialize(&ev)),
-                    };
-
-                    match self.swarm.behaviour_mut().gossipsub.publish(topic.clone(), data.expect("bincode serialization never fails")) {
-                        // We don't care if there no peers
-                        Ok(_) | Err(gossipsub::PublishError::InsufficientPeers) => (),
-                        Err(err) => panic!("Failed to publish message: {err}"),
-                    }
-                },
+                    self.handle_command(cmd)
+                }
                 event = self.swarm.select_next_some() => match event {
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Mdns(mdns::Event::Discovered(list))) => {
                         for (peer_id, multiaddr) in list {
