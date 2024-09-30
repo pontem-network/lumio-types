@@ -11,8 +11,7 @@ version.workspace = true
 eyre.workspace = true
 lumio-types.workspace = true
 serde.workspace = true
-tokio.workspace = true
-log.workspace = true
+tokio = {workspace = true, features = ["sync", "rt", "time"]}
 
 [lints]
 workspace = true

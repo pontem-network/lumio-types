@@ -1,29 +1,29 @@
-use crate::ledger::{Ledger, SlotAttribute};
+use crate::{
+    ledger::{Ledger, SlotAttribute},
+    TaskGuard,
+};
 use eyre::Error;
 use lumio_types::Slot;
 use std::sync::Arc;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::Receiver;
 
-const SLOT_HANDLER_CHANNEL_SIZE: usize = 42;
 const SLOTS_TO_SKIP: u64 = 5 * 60 * 1000 / 400;
 
 pub struct SlotHandler<L> {
     ledger: Arc<L>,
     receiver: Receiver<SlotAttribute>,
     current_slot: u64,
+    _guard: TaskGuard,
 }
 
 impl<L: Ledger + Send + Sync + 'static> SlotHandler<L> {
-    pub fn new(ledger: Arc<L>) -> (Self, Sender<SlotAttribute>) {
-        let (sender, receiver) = channel(SLOT_HANDLER_CHANNEL_SIZE);
-        (
-            Self {
-                ledger,
-                receiver,
-                current_slot: 0,
-            },
-            sender,
-        )
+    pub fn new(ledger: Arc<L>, receiver: Receiver<SlotAttribute>, guard: TaskGuard) -> Self {
+        Self {
+            ledger,
+            receiver,
+            current_slot: 0,
+            _guard: guard,
+        }
     }
 
     pub async fn run(mut self) -> Result<(), Error> {
