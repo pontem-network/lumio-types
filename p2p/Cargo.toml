@@ -12,13 +12,14 @@ eyre.workspace = true
 futures.workspace = true
 libp2p = { workspace = true, features = [
   "gossipsub",
-  "tcp",
-  "noise",
+  "macros",
   "mdns",
+  "noise",
+  "quic",
+  "serde",
+  "tcp",
   "tokio",
   "yamux",
-  "quic",
-  "macros",
 ] }
 tracing.workspace = true
 hex.workspace = true

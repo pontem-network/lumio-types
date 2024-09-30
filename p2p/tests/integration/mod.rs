@@ -17,8 +17,6 @@ async fn simple() {
 
     tokio::spawn(runner.run());
 
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
     let (mut node2, runner) = Node::new(Config {
         listen_on: vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()],
         bootstrap_addresses: vec![node1_addr],
@@ -28,6 +26,9 @@ async fn simple() {
     tokio::spawn(runner.run());
 
     let mut op_sol_events = node1.subscribe_lumio_op_sol_events().await.unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
     node2
         .send_lumio_op_sol(LumioEvents::SyncStatus((0, PayloadStatus::Pending)))
         .await

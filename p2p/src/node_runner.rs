@@ -2,6 +2,7 @@ use eyre::{Result, WrapErr};
 use futures::prelude::*;
 use libp2p::{gossipsub, mdns, swarm::SwarmEvent, PeerId, Swarm};
 use lumio_types::rpc::{AttributesArtifact, LumioEvents};
+use serde::{Deserialize, Serialize};
 
 use std::collections::HashSet;
 
@@ -24,6 +25,12 @@ pub struct NodeRunner {
     lumio_move_events: Option<futures::channel::mpsc::Sender<LumioEvents>>,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+struct Auth {
+    peer_id: PeerId,
+    claim: String,
+}
+
 impl NodeRunner {
     pub(crate) fn new(
         swarm: Swarm<LumioBehaviour>,
@@ -43,7 +50,7 @@ impl NodeRunner {
         }
     }
 
-    // -> !
+    #[tracing::instrument(skip_all, fields(peer_id = %self.swarm.local_peer_id()))]
     pub async fn run(mut self) {
         // Kick it off
         loop {
@@ -85,16 +92,6 @@ impl NodeRunner {
                             tracing::debug!(?peer_id, %multiaddr, "mDNS discovered a new peer");
                             self.swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
                         }
-
-                        // AUTH for as there are new peers
-                        let claim = self.jwt.claim().expect("Encoding JWT never fails");
-                        let result = self.swarm
-                            .behaviour_mut()
-                            .gossipsub
-                            .publish(topics::Auth::topic().clone(), claim);
-                        if let Err(err) = result {
-                            tracing::debug!(?err, "Failed to send auth message because of new peer");
-                        }
                     },
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Mdns(mdns::Event::Expired(list))) => {
                         for (peer_id, multiaddr) in list {
@@ -102,6 +99,26 @@ impl NodeRunner {
                             self.swarm.behaviour_mut().gossipsub.remove_explicit_peer(&peer_id);
                         }
                     },
+                    // Send auth as new peer is subscribed
+                    SwarmEvent::Behaviour(LumioBehaviourEvent::Gossipsub(gossipsub::Event::Subscribed {
+                        topic,
+                        ..
+                    })) if topic == *topics::Auth::hash() => {
+                        let auth = bincode::serialize(&Auth {
+                            peer_id: self.swarm.local_peer_id().clone(),
+                            claim: self.jwt.claim().expect("Encoding JWT never fails"),
+                        })
+                        .expect("bincode ser never fails");
+
+                        let result =
+                            self.swarm
+                            .behaviour_mut()
+                            .gossipsub
+                            .publish(topics::Auth::topic().clone(), auth);
+                        if let Err(err) = result {
+                            tracing::debug!(?err, "Failed to send auth message because of new peer");
+                        }
+                    }
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Gossipsub(gossipsub::Event::Message {
                         message: libp2p::gossipsub::Message {
                             data,
@@ -118,7 +135,12 @@ impl NodeRunner {
 
                         match (topic, self.authorized.contains(&source)) {
                             (t, _) if t == *topics::Auth::hash() => {
-                                let Err(err) = self.authorize(source, data) else { continue };
+                                let Ok(Auth { peer_id, claim }) = bincode::deserialize(&*data) else {
+                                    tracing::debug!("Failed to decode op move event. Skipping...");
+                                    continue;
+                                };
+
+                                let Err(err) = self.authorize(peer_id, claim) else { continue };
                                 tracing::debug!("Failed to auth peer {source}: {err:?}");
                             }
                             (t, true) if t == *topics::OpMoveEvents::hash() => {
@@ -161,18 +183,16 @@ impl NodeRunner {
                             (topic, true) => tracing::debug!(?topic, "Ignoring message from unknown topic"),
                         }
                     },
-                    SwarmEvent::NewListenAddr { address, .. } => {
-                        tracing::debug!("Local node is listening on {address}");
-                    }
-                    _ => {}
+                    SwarmEvent::NewListenAddr { address, .. } => tracing::debug!("Local node is listening on {address}"),
+                    event => tracing::trace!(?event),
                 }
             }
         }
     }
 
-    pub fn authorize(&mut self, source: PeerId, data: Vec<u8>) -> Result<()> {
+    pub fn authorize(&mut self, source: PeerId, claim: String) -> Result<()> {
         self.jwt
-            .decode(String::from_utf8(data).context("Failed to decode JWT claim. Invalid UTF8")?)
+            .decode(claim)
             .context("Failed to decode JWT claim")?;
         self.authorized.insert(source);
         Ok(())
