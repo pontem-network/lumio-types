@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(unused_crate_dependencies))]
+
 use eyre::{Result, WrapErr};
 use futures::prelude::*;
 use libp2p::multiaddr::Multiaddr;
