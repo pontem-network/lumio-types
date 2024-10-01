@@ -86,8 +86,11 @@ impl NodeRunner {
             topic.clone(),
             data.expect("bincode serialization never fails"),
         ) {
-            // We don't care if there no peers
-            Ok(_) | Err(gossipsub::PublishError::InsufficientPeers) => (),
+            Ok(_) => (),
+            Err(gossipsub::PublishError::InsufficientPeers) => {
+                // TODO: print topic name
+                tracing::warn!("Something might be wrong. Noone listens on topic hash {topic}")
+            }
             Err(err) => panic!("Failed to publish message: {err}"),
         }
     }
