@@ -56,7 +56,7 @@ impl NodeRunner {
                 self.swarm
                     .behaviour_mut()
                     .gossipsub
-                    .subscribe(cmd.topic())
+                    .subscribe(&cmd.topic())
                     .expect(
                         "Something went terribly wrong, as we failed to subscribe to some topic",
                     );
@@ -69,16 +69,16 @@ impl NodeRunner {
                 return;
             }
             Command::SendEvent(SendEventCommand::OpMove(art)) => {
-                (topics::OpMoveEvents::hash(), bincode::serialize(&art))
+                (topics::OpMoveEvents.hash(), bincode::serialize(&art))
             }
             Command::SendEvent(SendEventCommand::OpSol(art)) => {
-                (topics::OpSolEvents::hash(), bincode::serialize(&art))
+                (topics::OpSolEvents.hash(), bincode::serialize(&art))
             }
             Command::SendEvent(SendEventCommand::LumioOpSol(ev)) => {
-                (topics::LumioSolEvents::hash(), bincode::serialize(&ev))
+                (topics::LumioSolEvents.hash(), bincode::serialize(&ev))
             }
             Command::SendEvent(SendEventCommand::LumioOpMove(ev)) => {
-                (topics::LumioMoveEvents::hash(), bincode::serialize(&ev))
+                (topics::LumioMoveEvents.hash(), bincode::serialize(&ev))
             }
         };
 
@@ -105,7 +105,7 @@ impl NodeRunner {
         };
 
         match (topic, self.authorized.contains(&source)) {
-            (t, _) if t == *topics::Auth::hash() => {
+            (t, _) if t == topics::Auth.hash() => {
                 let Ok(Auth { peer_id, claim }) = bincode::deserialize(&data) else {
                     tracing::debug!("Failed to decode op move event. Skipping...");
                     return;
@@ -116,7 +116,7 @@ impl NodeRunner {
                 };
                 tracing::debug!("Failed to auth peer {source}: {err:?}");
             }
-            (t, true) if t == *topics::OpMoveEvents::hash() => {
+            (t, true) if t == topics::OpMoveEvents.hash() => {
                 let ch = self
                     .op_move_events
                     .as_mut()
@@ -128,7 +128,7 @@ impl NodeRunner {
 
                 let _ = ch.send(msg).await;
             }
-            (t, true) if t == *topics::OpSolEvents::hash() => {
+            (t, true) if t == topics::OpSolEvents.hash() => {
                 let ch = self
                     .op_sol_events
                     .as_mut()
@@ -140,7 +140,7 @@ impl NodeRunner {
 
                 let _ = ch.send(msg).await;
             }
-            (t, true) if t == *topics::LumioSolEvents::hash() => {
+            (t, true) if t == topics::LumioSolEvents.hash() => {
                 let ch = self
                     .lumio_sol_events
                     .as_mut()
@@ -152,7 +152,7 @@ impl NodeRunner {
 
                 let _ = ch.send(msg).await;
             }
-            (t, true) if t == *topics::LumioMoveEvents::hash() => {
+            (t, true) if t == topics::LumioMoveEvents.hash() => {
                 let ch = self
                     .lumio_move_events
                     .as_mut()
@@ -196,7 +196,7 @@ impl NodeRunner {
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Gossipsub(gossipsub::Event::Subscribed {
                         topic,
                         ..
-                    })) if topic == *topics::Auth::hash() => {
+                    })) if topic == topics::Auth.hash() => {
                         let auth = bincode::serialize(&Auth {
                             peer_id: *self.swarm.local_peer_id(),
                             claim: self.jwt.claim().expect("Encoding JWT never fails"),
@@ -207,7 +207,7 @@ impl NodeRunner {
                             self.swarm
                             .behaviour_mut()
                             .gossipsub
-                            .publish(topics::Auth::topic().clone(), auth);
+                            .publish(topics::Auth.topic().clone(), auth);
                         if let Err(err) = result {
                             tracing::debug!(?err, "Failed to send auth message because of new peer");
                         }

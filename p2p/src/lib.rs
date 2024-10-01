@@ -45,12 +45,12 @@ enum SubscribeCommand {
 }
 
 impl SubscribeCommand {
-    pub fn topic(&self) -> &gossipsub::IdentTopic {
+    pub fn topic(&self) -> gossipsub::IdentTopic {
         match self {
-            Self::OpMove(_) => topics::OpMoveEvents::topic(),
-            Self::OpSol(_) => topics::OpSolEvents::topic(),
-            Self::LumioOpSol(_) => topics::LumioSolEvents::topic(),
-            Self::LumioOpMove(_) => topics::LumioMoveEvents::topic(),
+            Self::OpMove(_) => topics::OpMoveEvents.topic(),
+            Self::OpSol(_) => topics::OpSolEvents.topic(),
+            Self::LumioOpSol(_) => topics::LumioSolEvents.topic(),
+            Self::LumioOpMove(_) => topics::LumioMoveEvents.topic(),
         }
     }
 }
@@ -135,12 +135,12 @@ impl Node {
         swarm
             .behaviour_mut()
             .gossipsub
-            .subscribe(topics::Auth::topic())?;
+            .subscribe(&topics::Auth.topic())?;
 
         match swarm
             .behaviour_mut()
             .gossipsub
-            .publish(topics::Auth::topic().clone(), jwt.claim()?)
+            .publish(topics::Auth.topic().clone(), jwt.claim()?)
         {
             Ok(_) => tracing::debug!("Send auth message"),
             // We don't care if there no peers at this stage. We'll auth once someone subscribes
@@ -238,25 +238,24 @@ pub(crate) mod topics {
     use std::sync::LazyLock;
 
     pub trait Topic {
-        fn topic() -> &'static IdentTopic;
+        fn topic(&self) -> IdentTopic;
 
-        fn hash() -> &'static TopicHash;
+        fn hash(&self) -> TopicHash;
     }
 
     macro_rules! topic {
         ( $(struct $name:ident($topic:literal) ;)* ) => {$(
+            #[derive(Clone, Copy, Debug, Default)]
             pub struct $name;
 
             impl Topic for $name {
-                fn topic() -> &'static IdentTopic {
-                    #[allow(non_upper_case_globals)]
-                    static $name: LazyLock<IdentTopic> = LazyLock::new(|| IdentTopic::new(concat!("/lumio/v1/", $topic)));
-                    &$name
+                fn topic(&self) -> IdentTopic {
+                    static TOPIC: LazyLock<IdentTopic> = LazyLock::new(|| IdentTopic::new(concat!("/lumio/v1/", $topic)));
+                    TOPIC.clone()
                 }
-                fn hash() -> &'static TopicHash {
-                    #[allow(non_upper_case_globals)]
-                    static $name: LazyLock<TopicHash> = LazyLock::new(|| $name::topic().hash());
-                    &$name
+                fn hash(&self) -> TopicHash {
+                    static HASH: LazyLock<TopicHash> = LazyLock::new(|| $name.topic().hash());
+                    HASH.clone()
                 }
             }
         )*}
