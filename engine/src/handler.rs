@@ -1,9 +1,6 @@
-use crate::{
-    ledger::{Ledger, SlotAttribute},
-    TaskGuard,
-};
+use crate::{ledger::Ledger, TaskGuard};
 use eyre::Error;
-use lumio_types::Slot;
+use lumio_types::{p2p::SlotAttribute, Slot};
 use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
 
@@ -106,20 +103,19 @@ mod tests {
 
     use super::*;
 
-    impl SlotAttribute {
-        fn empty(slot_id: u64) -> Self {
-            Self::new(slot_id, vec![])
-        }
+    fn empty(slot_id: u64) -> SlotAttribute {
+        SlotAttribute::new(slot_id, vec![], None)
+    }
 
-        fn with_events(slot_id: u64) -> Self {
-            Self::new(
-                slot_id,
-                vec![L1Event::Deposit(Bridge {
-                    account: H256::default(),
-                    amount: 2,
-                })],
-            )
-        }
+    fn with_events(slot_id: u64) -> SlotAttribute {
+        SlotAttribute::new(
+            slot_id,
+            vec![L1Event::Deposit(Bridge {
+                account: H256::default(),
+                amount: 2,
+            })],
+            None,
+        )
     }
 
     #[test]
@@ -133,7 +129,7 @@ mod tests {
     #[test]
     fn test_skip_range_try_skip_empty_payload() {
         let mut skip_range = SkipRange::new(10, 5);
-        let payload = SlotAttribute::empty(11);
+        let payload = empty(11);
         assert_eq!(skip_range.try_skip(payload.clone()), None);
         assert_eq!(skip_range.skipped, 1);
     }
@@ -141,7 +137,7 @@ mod tests {
     #[test]
     fn test_skip_range_try_skip_non_empty_payload() {
         let mut skip_range = SkipRange::new(10, 5);
-        let payload = SlotAttribute::with_events(11);
+        let payload = with_events(11);
         let result = skip_range.try_skip(payload.clone());
         assert!(result.is_some());
         let (from, returned_payload) = result.unwrap();
@@ -154,9 +150,9 @@ mod tests {
     #[test]
     fn test_skip_range_try_skip_max_skipped() {
         let mut skip_range = SkipRange::new(10, 2);
-        let payload1 = SlotAttribute::empty(11);
-        let payload2 = SlotAttribute::empty(12);
-        let payload3 = SlotAttribute::empty(13);
+        let payload1 = empty(11);
+        let payload2 = empty(12);
+        let payload3 = empty(13);
 
         assert_eq!(skip_range.try_skip(payload1.clone()), None);
         assert_eq!(skip_range.skipped, 1);

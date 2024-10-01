@@ -3,9 +3,9 @@ use std::{
     str::FromStr,
 };
 
-use eyre::eyre;
 use borsh::{BorshDeserialize, BorshSerialize};
 use derive_more::{AsRef, From, Into};
+use eyre::eyre;
 use serde::{Deserialize, Serialize};
 
 #[derive(

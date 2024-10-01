@@ -1,8 +1,11 @@
 use eyre::Result;
 use handler::SlotHandler;
 use info::L2Info;
-use ledger::{Ledger, SlotArtifact, SlotAttribute};
-use lumio_types::Slot;
+use ledger::Ledger;
+use lumio_types::{
+    p2p::{SlotArtifact, SlotAttribute},
+    Slot,
+};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,

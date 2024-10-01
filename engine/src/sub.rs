@@ -1,8 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::ledger::{Ledger, SlotArtifact};
+use crate::ledger::Ledger;
 use eyre::Error;
-use lumio_types::Slot;
+use lumio_types::{p2p::SlotArtifact, Slot};
 use tokio::{sync::mpsc::Sender, time::sleep};
 
 pub struct SlotSub<L> {

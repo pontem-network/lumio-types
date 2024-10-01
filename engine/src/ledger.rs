@@ -1,9 +1,8 @@
 use std::future::Future;
 
 use eyre::Error;
-use lumio_types::{events::l1::L1Event, Hash, Slot};
-use lumio_types::{events::l2::L2Event, payload::SlotPayload};
-use serde::{Deserialize, Serialize};
+use lumio_types::p2p::{SlotArtifact, SlotAttribute};
+use lumio_types::{Hash, Slot};
 
 pub trait Ledger {
     /// Get the current slot.
@@ -27,30 +26,4 @@ pub trait Ledger {
         skip_from: Option<Slot>,
         slot: SlotAttribute,
     ) -> impl Future<Output = Result<(), Error>> + Send;
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct SlotArtifact {
-    pub payload: SlotPayload,
-    pub events: Vec<L2Event>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct SlotAttribute {
-    slot_id: Slot,
-    events: Vec<L1Event>,
-}
-
-impl SlotAttribute {
-    pub fn new(slot_id: Slot, events: Vec<L1Event>) -> Self {
-        Self { slot_id, events }
-    }
-
-    pub fn id(&self) -> Slot {
-        self.slot_id
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.events.is_empty()
-    }
 }
