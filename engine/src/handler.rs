@@ -1,25 +1,28 @@
-use crate::{ledger::Ledger, TaskGuard};
+use crate::ledger::Ledger;
 use eyre::Error;
+use futures::Stream;
+use futures::StreamExt;
 use lumio_types::{p2p::SlotAttribute, Slot};
 use std::sync::Arc;
-use tokio::sync::mpsc::Receiver;
 
 const SLOTS_TO_SKIP: u64 = 5 * 60 * 1000 / 400;
 
-pub struct SlotHandler<L> {
+pub struct SlotHandler<L, S> {
     ledger: Arc<L>,
-    receiver: Receiver<SlotAttribute>,
+    receiver: S,
     current_slot: u64,
-    _guard: TaskGuard,
 }
 
-impl<L: Ledger + Send + Sync + 'static> SlotHandler<L> {
-    pub fn new(ledger: Arc<L>, receiver: Receiver<SlotAttribute>, guard: TaskGuard) -> Self {
+impl<L, S> SlotHandler<L, S>
+where
+    L: Ledger + Send + Sync + 'static,
+    S: Stream<Item = SlotAttribute> + Send + Sync + Unpin + 'static,
+{
+    pub fn new(ledger: Arc<L>, receiver: S) -> Self {
         Self {
             ledger,
             receiver,
             current_slot: 0,
-            _guard: guard,
         }
     }
 
@@ -27,16 +30,14 @@ impl<L: Ledger + Send + Sync + 'static> SlotHandler<L> {
         self.current_slot = self.ledger.get_committed_l1_slot()?;
 
         let mut skip_range = SkipRange::new(self.current_slot, SLOTS_TO_SKIP);
-        loop {
-            if let Some(payload) = self.receiver.recv().await {
-                self.ensure_right_slot(payload.id())?;
-                if let Some((from, payload)) = skip_range.try_skip(payload) {
-                    self.ledger.apply_slot(from, payload).await?;
-                }
-            } else {
-                return Err(Error::msg("SlotHandler: channel closed"));
+        while let Some(payload) = self.receiver.next().await {
+            self.ensure_right_slot(payload.id())?;
+
+            if let Some((from, payload)) = skip_range.try_skip(payload) {
+                self.ledger.apply_slot(from, payload).await?;
             }
         }
+        Ok(())
     }
 
     fn ensure_right_slot(&mut self, slot: Slot) -> Result<(), Error> {

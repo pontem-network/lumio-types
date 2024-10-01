@@ -9,6 +9,8 @@ version.workspace = true
 
 [dependencies]
 eyre.workspace = true
+futures.workspace = true
+lumio-p2p.workspace = true
 lumio-types.workspace = true
 serde.workspace = true
 tokio = {workspace = true, features = ["sync", "rt", "time"]}

@@ -5,7 +5,7 @@ members = [
   "types",
   "p2p",
   "white-list",
-  "engine"
+  "engine",
 ]
 
 [workspace.package]
@@ -16,8 +16,9 @@ repository = "https://github.com/pontem-network/lumio-types"
 version = "0.1.0"
 
 [workspace.dependencies]
-lumio-types = {path = "types"}
 lumio-engine = {path = "engine"}
+lumio-p2p = {path = "p2p"}
+lumio-types = {path = "types"}
 
 arc-swap = "1.7.1"
 bincode = "1.3.3"
