@@ -5,6 +5,7 @@ use futures::prelude::*;
 use libp2p::multiaddr::Multiaddr;
 use libp2p::{gossipsub, mdns};
 use lumio_types::p2p::{SlotArtifact, SlotAttribute};
+use serde::{Deserialize, Serialize};
 
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
@@ -25,7 +26,7 @@ struct LumioBehaviour {
     mdns: mdns::tokio::Behaviour,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub listen_on: Vec<Multiaddr>,
     pub bootstrap_addresses: Vec<Multiaddr>,

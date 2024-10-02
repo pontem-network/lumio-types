@@ -97,3 +97,21 @@ impl JwtSecret {
         .map_err(Error::EncodeClaim)
     }
 }
+
+impl Serialize for JwtSecret {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        serializer.serialize_str(&hex::encode(&self.0))
+    }
+}
+
+impl<'de> Deserialize<'de> for JwtSecret {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        Self::from_hex(s).map_err(serde::de::Error::custom)
+    }
+}
