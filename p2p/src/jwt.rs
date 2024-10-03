@@ -103,7 +103,7 @@ impl Serialize for JwtSecret {
         &self,
         serializer: S,
     ) -> std::result::Result<S::Ok, S::Error> {
-        serializer.serialize_str(&hex::encode(&self.0))
+        serializer.serialize_str(&hex::encode(self.0))
     }
 }
 
