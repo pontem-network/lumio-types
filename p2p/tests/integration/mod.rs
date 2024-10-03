@@ -1,6 +1,6 @@
 use futures::prelude::*;
 use lumio_p2p::{libp2p::Multiaddr, Config, JwtSecret, Node};
-use lumio_types::rpc::{LumioEvents, PayloadStatus};
+use lumio_types::p2p::{PayloadStatus, SlotAttribute};
 
 #[tokio::test]
 async fn simple() {
@@ -30,12 +30,20 @@ async fn simple() {
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     node2
-        .send_lumio_op_sol(LumioEvents::SyncStatus((0, PayloadStatus::Pending)))
+        .send_lumio_op_sol(SlotAttribute::new(
+            1,
+            vec![],
+            Some((0, PayloadStatus::Pending)),
+        ))
         .await
         .unwrap();
 
-    assert!(matches!(
+    assert_eq!(
         op_sol_events.next().await,
-        Some(LumioEvents::SyncStatus((0, PayloadStatus::Pending)))
-    ));
+        Some(SlotAttribute::new(
+            1,
+            vec![],
+            Some((0, PayloadStatus::Pending)),
+        ))
+    );
 }

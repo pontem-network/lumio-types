@@ -1,0 +1,19 @@
+[package]
+name = "lumio-engine"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+eyre.workspace = true
+futures.workspace = true
+lumio-p2p.workspace = true
+lumio-types.workspace = true
+serde.workspace = true
+tokio = {workspace = true, features = ["sync", "rt", "time"]}
+
+[lints]
+workspace = true
