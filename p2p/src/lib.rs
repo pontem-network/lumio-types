@@ -4,7 +4,7 @@ use eyre::{Result, WrapErr};
 use futures::prelude::*;
 use libp2p::multiaddr::Multiaddr;
 use libp2p::{gossipsub, mdns};
-use lumio_types::p2p::{SlotArtifact, SlotAttribute};
+use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
 use serde::{Deserialize, Serialize};
 
 use std::hash::{Hash, Hasher};
@@ -35,9 +35,9 @@ pub struct Config {
 
 enum SubscribeCommand {
     /// Events from op-move to lumio
-    OpMove(tokio::sync::mpsc::Sender<SlotArtifact>),
+    OpMove(tokio::sync::mpsc::Sender<SlotPayloadWithEvents>),
     /// Events from op-sol to lumio
-    OpSol(tokio::sync::mpsc::Sender<SlotArtifact>),
+    OpSol(tokio::sync::mpsc::Sender<SlotPayloadWithEvents>),
     /// Events from lumio to op-sol
     LumioOpSol(tokio::sync::mpsc::Sender<SlotAttribute>),
     /// Events from lumio to op-move
@@ -57,9 +57,9 @@ impl SubscribeCommand {
 
 enum SendEventCommand {
     /// Events from op-move to lumio
-    OpMove(SlotArtifact),
+    OpMove(SlotPayloadWithEvents),
     /// Events from op-sol to lumio
-    OpSol(SlotArtifact),
+    OpSol(SlotPayloadWithEvents),
     /// Events from lumio to op-sol
     LumioOpSol(SlotAttribute),
     /// Events from lumio to op-move
@@ -154,7 +154,7 @@ impl Node {
 
     pub async fn subscribe_op_move_events(
         &mut self,
-    ) -> Result<impl Stream<Item = SlotArtifact> + Unpin + 'static> {
+    ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
         self.cmd_sender
             .send(Command::Subscribe(SubscribeCommand::OpMove(sender)))
@@ -165,7 +165,7 @@ impl Node {
 
     pub async fn subscribe_op_sol_events(
         &mut self,
-    ) -> Result<impl Stream<Item = SlotArtifact> + Unpin + 'static> {
+    ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
         self.cmd_sender
             .send(Command::Subscribe(SubscribeCommand::OpSol(sender)))
@@ -212,7 +212,7 @@ impl Node {
         Ok(())
     }
 
-    pub async fn send_op_sol(&mut self, artifacts: SlotArtifact) -> Result<()> {
+    pub async fn send_op_sol(&mut self, artifacts: SlotPayloadWithEvents) -> Result<()> {
         self.cmd_sender
             .send(Command::SendEvent(SendEventCommand::OpSol(artifacts)))
             .await
@@ -220,7 +220,7 @@ impl Node {
         Ok(())
     }
 
-    pub async fn send_op_move(&mut self, artifacts: SlotArtifact) -> Result<()> {
+    pub async fn send_op_move(&mut self, artifacts: SlotPayloadWithEvents) -> Result<()> {
         self.cmd_sender
             .send(Command::SendEvent(SendEventCommand::OpMove(artifacts)))
             .await

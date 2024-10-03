@@ -2,21 +2,28 @@ use std::{sync::Arc, time::Duration};
 
 use crate::ledger::Ledger;
 use eyre::Error;
-use lumio_types::{p2p::SlotArtifact, Slot};
+use lumio_types::{p2p::SlotPayloadWithEvents, Slot};
 use tokio::{sync::mpsc::Sender, time::sleep};
 
 pub struct SlotSub<L> {
     slot: Slot,
     ledger: Arc<L>,
-    sender: Sender<SlotArtifact>,
+    sender: Sender<SlotPayloadWithEvents>,
+    slot_time: Duration,
 }
 
 impl<L: Ledger> SlotSub<L> {
-    pub fn new(slot: Slot, ledger: Arc<L>, sender: Sender<SlotArtifact>) -> Self {
+    pub fn new(
+        slot: Slot,
+        ledger: Arc<L>,
+        sender: Sender<SlotPayloadWithEvents>,
+        slot_time: Duration,
+    ) -> Self {
         Self {
             slot,
             ledger,
             sender,
+            slot_time,
         }
     }
 
@@ -26,7 +33,7 @@ impl<L: Ledger> SlotSub<L> {
                 self.sender.send(slot).await?;
                 self.slot += 1;
             } else {
-                sleep(Duration::from_millis(200)).await;
+                sleep(self.slot_time).await;
             }
         }
     }

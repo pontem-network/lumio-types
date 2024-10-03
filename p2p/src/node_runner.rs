@@ -1,7 +1,7 @@
 use eyre::{Result, WrapErr};
 use futures::prelude::*;
 use libp2p::{gossipsub, mdns, swarm::SwarmEvent, PeerId, Swarm};
-use lumio_types::p2p::{SlotArtifact, SlotAttribute};
+use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashSet;
@@ -19,8 +19,8 @@ pub struct NodeRunner {
 
     authorized: HashSet<PeerId>,
 
-    op_move_events: Option<tokio::sync::mpsc::Sender<SlotArtifact>>,
-    op_sol_events: Option<tokio::sync::mpsc::Sender<SlotArtifact>>,
+    op_move_events: Option<tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
+    op_sol_events: Option<tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
     lumio_sol_events: Option<tokio::sync::mpsc::Sender<SlotAttribute>>,
     lumio_move_events: Option<tokio::sync::mpsc::Sender<SlotAttribute>>,
 }

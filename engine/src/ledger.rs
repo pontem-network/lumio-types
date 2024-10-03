@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use eyre::Error;
-use lumio_types::p2p::{SlotArtifact, SlotAttribute};
+use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
 use lumio_types::{Hash, Slot};
 
 pub trait Ledger {
@@ -18,7 +18,7 @@ pub trait Ledger {
     fn get_slot(
         &self,
         slot_id: Slot,
-    ) -> impl Future<Output = Result<Option<SlotArtifact>, Error>> + Send;
+    ) -> impl Future<Output = Result<Option<SlotPayloadWithEvents>, Error>> + Send;
 
     /// Apply events to the slot.
     fn apply_slot(

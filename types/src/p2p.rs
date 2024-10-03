@@ -6,10 +6,9 @@ use serde_with::{
     base64::{Base64, Standard},
     formats::Unpadded,
 };
-use std::mem::size_of;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct SlotArtifact {
+pub struct SlotPayloadWithEvents {
     pub payload: SlotPayload,
     pub events: Vec<L2Event>,
 }
@@ -70,14 +69,4 @@ pub struct SlotPayload {
     #[serde_as(as = "Vec<Base64<Standard, Unpadded>>")]
     pub txs: Vec<Transaction>,
     pub bank_hash: Hash,
-}
-
-impl SlotPayload {
-    pub fn size(&self) -> usize {
-        size_of::<Slot>()
-            + size_of::<Hash>() * 3
-            + size_of::<Option<UnixTimestamp>>()
-            + size_of::<Option<u64>>()
-            + self.txs.iter().map(|tx| tx.len()).sum::<usize>()
-    }
 }

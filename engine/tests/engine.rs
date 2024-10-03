@@ -1,7 +1,7 @@
 use eyre::Result;
 use lumio_engine::ledger::Ledger;
 use lumio_types::{
-    p2p::{SlotArtifact, SlotAttribute, SlotPayload},
+    p2p::{SlotAttribute, SlotPayload, SlotPayloadWithEvents},
     Hash, Slot,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -31,7 +31,7 @@ impl Ledger for FakeLedger {
     fn get_slot(
         &self,
         slot_id: lumio_types::Slot,
-    ) -> impl std::future::Future<Output = Result<Option<SlotArtifact>>> + Send {
+    ) -> impl std::future::Future<Output = Result<Option<SlotPayloadWithEvents>>> + Send {
         let res = self.current_slot.compare_exchange(
             slot_id,
             slot_id + 1,
@@ -49,7 +49,7 @@ impl Ledger for FakeLedger {
                     txs: vec![],
                     bank_hash: Hash::default(),
                 };
-                let artifact = SlotArtifact {
+                let artifact = SlotPayloadWithEvents {
                     payload,
                     events: vec![],
                 };
