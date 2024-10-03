@@ -169,7 +169,7 @@ impl Node {
     }
 
     pub async fn subscribe_op_move_events(
-        &mut self,
+        &self,
     ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
         self.cmd_sender
@@ -180,7 +180,7 @@ impl Node {
     }
 
     pub async fn subscribe_op_sol_events(
-        &mut self,
+        &self,
     ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
         self.cmd_sender
@@ -191,7 +191,7 @@ impl Node {
     }
 
     pub async fn subscribe_op_move_events_since(
-        &mut self,
+        &self,
         since: Slot,
     ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
@@ -206,7 +206,7 @@ impl Node {
     }
 
     pub async fn subscribe_op_sol_events_since(
-        &mut self,
+        &self,
         since: Slot,
     ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
@@ -221,7 +221,7 @@ impl Node {
     }
 
     pub async fn subscribe_lumio_op_sol_events(
-        &mut self,
+        &self,
     ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(20);
         self.cmd_sender
@@ -232,7 +232,7 @@ impl Node {
     }
 
     pub async fn subscribe_lumio_op_move_events(
-        &mut self,
+        &self,
     ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(20);
         self.cmd_sender
@@ -242,7 +242,7 @@ impl Node {
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
-    pub async fn send_lumio_op_move(&mut self, events: SlotAttribute) -> Result<()> {
+    pub async fn send_lumio_op_move(&self, events: SlotAttribute) -> Result<()> {
         self.cmd_sender
             .send(Command::SendEvent(SendEventCommand::LumioOpMove(events)))
             .await
@@ -250,7 +250,7 @@ impl Node {
         Ok(())
     }
 
-    pub async fn send_lumio_op_sol(&mut self, events: SlotAttribute) -> Result<()> {
+    pub async fn send_lumio_op_sol(&self, events: SlotAttribute) -> Result<()> {
         self.cmd_sender
             .send(Command::SendEvent(SendEventCommand::LumioOpSol(events)))
             .await
@@ -258,7 +258,7 @@ impl Node {
         Ok(())
     }
 
-    pub async fn send_op_sol(&mut self, artifacts: SlotPayloadWithEvents) -> Result<()> {
+    pub async fn send_op_sol(&self, artifacts: SlotPayloadWithEvents) -> Result<()> {
         self.cmd_sender
             .send(Command::SendEvent(SendEventCommand::OpSol(artifacts)))
             .await
@@ -266,7 +266,7 @@ impl Node {
         Ok(())
     }
 
-    pub async fn send_op_move(&mut self, artifacts: SlotPayloadWithEvents) -> Result<()> {
+    pub async fn send_op_move(&self, artifacts: SlotPayloadWithEvents) -> Result<()> {
         self.cmd_sender
             .send(Command::SendEvent(SendEventCommand::OpMove(artifacts)))
             .await

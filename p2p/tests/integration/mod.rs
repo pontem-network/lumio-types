@@ -8,7 +8,7 @@ async fn simple() {
 
     let jwt = rand::random::<JwtSecret>();
     let node1_addr = "/ip4/127.0.0.1/tcp/61023".parse::<Multiaddr>().unwrap();
-    let (mut node1, runner) = Node::new(
+    let (node1, runner) = Node::new(
         libp2p::identity::Keypair::generate_ed25519(),
         Config {
             listen_on: vec![node1_addr.clone()],
@@ -20,7 +20,7 @@ async fn simple() {
 
     tokio::spawn(runner.run());
 
-    let (mut node2, runner) = Node::new(
+    let (node2, runner) = Node::new(
         libp2p::identity::Keypair::generate_ed25519(),
         Config {
             listen_on: vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()],
