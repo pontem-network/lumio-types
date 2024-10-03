@@ -77,8 +77,11 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new(cfg: Config) -> eyre::Result<(Self, NodeRunner)> {
-        let mut swarm = libp2p::SwarmBuilder::with_new_identity()
+    pub fn new(
+        keypair: libp2p::identity::Keypair,
+        cfg: Config,
+    ) -> eyre::Result<(Self, NodeRunner)> {
+        let mut swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
             .with_tokio()
             .with_tcp(
                 libp2p::tcp::Config::default(),
