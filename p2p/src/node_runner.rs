@@ -1,10 +1,16 @@
 use eyre::{Result, WrapErr};
 use futures::prelude::*;
-use libp2p::{gossipsub, mdns, swarm::SwarmEvent, PeerId, Swarm};
+use libp2p::{
+    gossipsub::{self, TopicHash},
+    mdns,
+    swarm::SwarmEvent,
+    PeerId, Swarm,
+};
 use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
+use lumio_types::Slot;
 use serde::{Deserialize, Serialize};
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::topics::Topic;
 use crate::{
@@ -23,6 +29,15 @@ pub struct NodeRunner {
     op_sol_events: Option<tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
     lumio_sol_events: Option<tokio::sync::mpsc::Sender<SlotAttribute>>,
     lumio_move_events: Option<tokio::sync::mpsc::Sender<SlotAttribute>>,
+    op_move_commands: Option<
+        tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Receiver<SlotPayloadWithEvents>)>,
+    >,
+    op_sol_commands: Option<
+        tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Receiver<SlotPayloadWithEvents>)>,
+    >,
+
+    op_move_events_since: HashMap<TopicHash, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
+    op_sol_events_since: HashMap<TopicHash, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -47,6 +62,10 @@ impl NodeRunner {
             op_sol_events: None,
             lumio_sol_events: None,
             lumio_move_events: None,
+            op_move_commands: None,
+            op_sol_commands: None,
+            op_move_events_since: Default::default(),
+            op_sol_events_since: Default::default(),
         }
     }
 
@@ -65,6 +84,14 @@ impl NodeRunner {
                     SubscribeCommand::OpSol(sender) => self.op_sol_events = Some(sender),
                     SubscribeCommand::LumioOpSol(sender) => self.lumio_sol_events = Some(sender),
                     SubscribeCommand::LumioOpMove(sender) => self.lumio_move_events = Some(sender),
+                    SubscribeCommand::OpMoveSince { sender, since } => {
+                        self.op_move_events_since
+                            .insert(topics::OpMoveEventsSince(since).hash(), sender);
+                    }
+                    SubscribeCommand::OpSolSince { sender, since } => {
+                        self.op_sol_events_since
+                            .insert(topics::OpSolEventsSince(since).hash(), sender);
+                    }
                 }
                 return;
             }
@@ -167,8 +194,66 @@ impl NodeRunner {
 
                 let _ = ch.send(msg).await;
             }
-            (_, false) => tracing::trace!(?source, "Ignoring message from unauthorized"),
+            (t, true) if t == topics::OpMoveCommands.hash() => {
+                let ch = self
+                    .op_move_commands
+                    .as_mut()
+                    .expect("We should always have a channel if we subscribed to topic");
+                let Ok(msg) = bincode::deserialize::<topics::OpMoveEventsSince>(&data) else {
+                    tracing::debug!("Failed to decode op move commands. Skipping...");
+                    return;
+                };
+                self.swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .subscribe(&msg.topic())
+                    .expect(
+                        "Something went terribly wrong, as we failed to subscribe to some topic",
+                    );
+
+                let (sender, receiver) = tokio::sync::mpsc::channel(10);
+                let _ = ch.send((msg.0, receiver)).await;
+                self.op_move_events_since.insert(msg.hash(), sender);
+            }
+            (t, true) if t == topics::OpSolCommands.hash() => {
+                let ch = self
+                    .op_sol_commands
+                    .as_mut()
+                    .expect("We should always have a channel if we subscribed to topic");
+                let Ok(msg) = bincode::deserialize::<topics::OpSolEventsSince>(&data) else {
+                    tracing::debug!("Failed to decode op move commands. Skipping...");
+                    return;
+                };
+                self.swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .subscribe(&msg.topic())
+                    .expect(
+                        "Something went terribly wrong, as we failed to subscribe to some topic",
+                    );
+
+                let (sender, receiver) = tokio::sync::mpsc::channel(10);
+                let _ = ch.send((msg.0, receiver)).await;
+                self.op_move_events_since.insert(msg.hash(), sender);
+            }
+            (t, true) if self.op_move_events_since.contains_key(&t) => {
+                let Ok(msg) = bincode::deserialize(&data) else {
+                    tracing::debug!("Failed to decode op move commands. Skipping...");
+                    return;
+                };
+                let sender = self.op_move_events_since.get(&t).unwrap();
+                let _ = sender.send(msg).await;
+            }
+            (t, true) if self.op_move_events_since.contains_key(&t) => {
+                let Ok(msg) = bincode::deserialize(&data) else {
+                    tracing::debug!("Failed to decode op move commands. Skipping...");
+                    return;
+                };
+                let sender = self.op_move_events_since.get(&t).unwrap();
+                let _ = sender.send(msg).await;
+            }
             (topic, true) => tracing::debug!(?topic, "Ignoring message from unknown topic"),
+            (_, false) => tracing::trace!(?source, "Ignoring message from unauthorized"),
         }
     }
 

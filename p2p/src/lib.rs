@@ -5,6 +5,7 @@ use futures::prelude::*;
 use libp2p::multiaddr::Multiaddr;
 use libp2p::{gossipsub, mdns};
 use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
+use lumio_types::Slot;
 use serde::{Deserialize, Serialize};
 
 use std::hash::{Hash, Hasher};
@@ -36,8 +37,18 @@ pub struct Config {
 enum SubscribeCommand {
     /// Events from op-move to lumio
     OpMove(tokio::sync::mpsc::Sender<SlotPayloadWithEvents>),
+    /// Events from op-move to lumio
+    OpMoveSince {
+        since: Slot,
+        sender: tokio::sync::mpsc::Sender<SlotPayloadWithEvents>,
+    },
     /// Events from op-sol to lumio
     OpSol(tokio::sync::mpsc::Sender<SlotPayloadWithEvents>),
+    /// Events from op-sol to lumio
+    OpSolSince {
+        since: Slot,
+        sender: tokio::sync::mpsc::Sender<SlotPayloadWithEvents>,
+    },
     /// Events from lumio to op-sol
     LumioOpSol(tokio::sync::mpsc::Sender<SlotAttribute>),
     /// Events from lumio to op-move
@@ -48,7 +59,9 @@ impl SubscribeCommand {
     pub fn topic(&self) -> gossipsub::IdentTopic {
         match self {
             Self::OpMove(_) => topics::OpMoveEvents.topic(),
+            Self::OpMoveSince { since, .. } => topics::OpMoveEventsSince(*since).topic(),
             Self::OpSol(_) => topics::OpSolEvents.topic(),
+            Self::OpSolSince { since, .. } => topics::OpSolEventsSince(*since).topic(),
             Self::LumioOpSol(_) => topics::LumioSolEvents.topic(),
             Self::LumioOpMove(_) => topics::LumioMoveEvents.topic(),
         }
@@ -177,6 +190,36 @@ impl Node {
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
+    pub async fn subscribe_op_move_events_since(
+        &mut self,
+        since: Slot,
+    ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.cmd_sender
+            .send(Command::Subscribe(SubscribeCommand::OpMoveSince {
+                since,
+                sender,
+            }))
+            .await
+            .context("Node runner is probably dead")?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
+    }
+
+    pub async fn subscribe_op_sol_events_since(
+        &mut self,
+        since: Slot,
+    ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.cmd_sender
+            .send(Command::Subscribe(SubscribeCommand::OpSolSince {
+                since,
+                sender,
+            }))
+            .await
+            .context("Node runner is probably dead")?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
+    }
+
     pub async fn subscribe_lumio_op_sol_events(
         &mut self,
     ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
@@ -234,6 +277,7 @@ impl Node {
 
 pub(crate) mod topics {
     use libp2p::gossipsub::{IdentTopic, TopicHash};
+    use serde::{Deserialize, Serialize};
 
     use std::sync::LazyLock;
 
@@ -267,5 +311,32 @@ pub(crate) mod topics {
         struct OpSolEvents("op_sol_events");
         struct LumioSolEvents("lumio_sol_events");
         struct LumioMoveEvents("lumio_move_events");
+
+        struct OpSolCommands("op_sol_cmds");
+        struct OpMoveCommands("op_move_cmds");
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct OpSolEventsSince(pub lumio_types::Slot);
+
+    impl Topic for OpSolEventsSince {
+        fn topic(&self) -> IdentTopic {
+            IdentTopic::new(format!("/lumio/v1/op_sol_events/since/{}", self.0))
+        }
+        fn hash(&self) -> TopicHash {
+            self.topic().hash()
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct OpMoveEventsSince(pub lumio_types::Slot);
+
+    impl Topic for OpMoveEventsSince {
+        fn topic(&self) -> IdentTopic {
+            IdentTopic::new(format!("/lumio/v1/op_move_events/since/{}", self.0))
+        }
+        fn hash(&self) -> TopicHash {
+            self.topic().hash()
+        }
     }
 }
