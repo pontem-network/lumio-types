@@ -232,7 +232,7 @@ impl NodeRunner {
                     .as_ref()
                     .expect("We should always have a channel if we subscribed to topic");
                 let Ok(topic) = bincode::deserialize::<topics::OpSolEventsSince>(&data) else {
-                    tracing::debug!("Failed to decode op move commands. Skipping...");
+                    tracing::debug!("Failed to decode op sol commands. Skipping...");
                     return;
                 };
 
@@ -256,7 +256,7 @@ impl NodeRunner {
             }
             (t, true) if self.op_move_events_since_subs.contains_key(&t) => {
                 let Ok(msg) = bincode::deserialize(&data) else {
-                    tracing::debug!("Failed to decode op move commands. Skipping...");
+                    tracing::debug!("Failed to decode op move events. Skipping...");
                     return;
                 };
                 let sender = self.op_move_events_since_subs.get(&t).unwrap();
@@ -264,7 +264,7 @@ impl NodeRunner {
             }
             (t, true) if self.op_sol_events_since_subs.contains_key(&t) => {
                 let Ok(msg) = bincode::deserialize(&data) else {
-                    tracing::debug!("Failed to decode op move commands. Skipping...");
+                    tracing::debug!("Failed to decode op sol events. Skipping...");
                     return;
                 };
                 let sender = self.op_sol_events_since_subs.get(&t).unwrap();
