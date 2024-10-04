@@ -19,6 +19,8 @@ pub struct NodeRunner {
     swarm: Swarm<LumioBehaviour>,
     jwt: JwtSecret,
     cmd_receiver: tokio::sync::mpsc::Receiver<Command>,
+    // For tasks
+    cmd_sender: tokio::sync::mpsc::Sender<Command>,
 
     authorized: HashSet<PeerId>,
 
@@ -26,15 +28,14 @@ pub struct NodeRunner {
     op_sol_events: Option<tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
     lumio_sol_events: Option<tokio::sync::mpsc::Sender<SlotAttribute>>,
     lumio_move_events: Option<tokio::sync::mpsc::Sender<SlotAttribute>>,
-    op_move_commands: Option<
-        tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Receiver<SlotPayloadWithEvents>)>,
-    >,
-    op_sol_commands: Option<
-        tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Receiver<SlotPayloadWithEvents>)>,
-    >,
 
     op_move_events_since_subs: HashMap<TopicHash, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
     op_sol_events_since_subs: HashMap<TopicHash, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
+
+    op_move_events_since_handler:
+        Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>>,
+    op_sol_events_since_handler:
+        Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -47,23 +48,25 @@ impl NodeRunner {
     pub(crate) fn new(
         swarm: Swarm<LumioBehaviour>,
         jwt: JwtSecret,
-        cmd_receiver: tokio::sync::mpsc::Receiver<Command>,
-    ) -> Self {
-        Self {
+    ) -> (Self, tokio::sync::mpsc::Sender<Command>) {
+        let (cmd_sender, cmd_receiver) = tokio::sync::mpsc::channel(100);
+        let me = Self {
             swarm,
             jwt,
             cmd_receiver,
+            cmd_sender: cmd_sender.clone(),
 
             authorized: Default::default(),
             op_move_events: None,
             op_sol_events: None,
             lumio_sol_events: None,
             lumio_move_events: None,
-            op_move_commands: None,
-            op_sol_commands: None,
             op_move_events_since_subs: Default::default(),
             op_sol_events_since_subs: Default::default(),
-        }
+            op_move_events_since_handler: None,
+            op_sol_events_since_handler: None,
+        };
+        (me, cmd_sender)
     }
 
     fn publish_event<E: serde::Serialize>(&mut self, hash: TopicHash, event: &E) {
@@ -98,6 +101,12 @@ impl NodeRunner {
             SubscribeCommand::OpSol(sender) => self.op_sol_events = Some(sender),
             SubscribeCommand::LumioOpSol(sender) => self.lumio_sol_events = Some(sender),
             SubscribeCommand::LumioOpMove(sender) => self.lumio_move_events = Some(sender),
+            SubscribeCommand::OpMoveSinceHandler(sender) => {
+                self.op_move_events_since_handler = Some(sender)
+            }
+            SubscribeCommand::OpSolSinceHandler(sender) => {
+                self.op_sol_events_since_handler = Some(sender)
+            }
             SubscribeCommand::OpMoveSince { sender, since } => {
                 self.op_move_events_since_subs
                     .insert(topics::OpMoveEventsSince(since).hash(), sender);
@@ -191,45 +200,59 @@ impl NodeRunner {
             }
             (t, true) if t == topics::OpMoveCommands.hash() => {
                 let ch = self
-                    .op_move_commands
-                    .as_mut()
+                    .op_move_events_since_handler
+                    .as_ref()
                     .expect("We should always have a channel if we subscribed to topic");
-                let Ok(msg) = bincode::deserialize::<topics::OpMoveEventsSince>(&data) else {
+                let Ok(topic) = bincode::deserialize::<topics::OpMoveEventsSince>(&data) else {
                     tracing::debug!("Failed to decode op move commands. Skipping...");
                     return;
                 };
-                self.swarm
-                    .behaviour_mut()
-                    .gossipsub
-                    .subscribe(&msg.topic())
-                    .expect(
-                        "Something went terribly wrong, as we failed to subscribe to some topic",
-                    );
 
-                let (sender, receiver) = tokio::sync::mpsc::channel(10);
-                let _ = ch.send((msg.0, receiver)).await;
-                // self.op_move_events_since.insert(msg.hash(), receiver);
+                let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
+                let _ = ch.send((topic.0, sender)).await;
+                tokio::spawn({
+                    let cmd_sender = self.cmd_sender.clone();
+                    async move {
+                        while let Some(msg) = receiver.recv().await {
+                            let msg = bincode::serialize(&msg).unwrap();
+                            if cmd_sender
+                                .send(Command::SendEvent(topic.topic(), msg))
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
+                    }
+                });
             }
             (t, true) if t == topics::OpSolCommands.hash() => {
                 let ch = self
-                    .op_sol_commands
-                    .as_mut()
+                    .op_sol_events_since_handler
+                    .as_ref()
                     .expect("We should always have a channel if we subscribed to topic");
-                let Ok(msg) = bincode::deserialize::<topics::OpSolEventsSince>(&data) else {
+                let Ok(topic) = bincode::deserialize::<topics::OpSolEventsSince>(&data) else {
                     tracing::debug!("Failed to decode op move commands. Skipping...");
                     return;
                 };
-                self.swarm
-                    .behaviour_mut()
-                    .gossipsub
-                    .subscribe(&msg.topic())
-                    .expect(
-                        "Something went terribly wrong, as we failed to subscribe to some topic",
-                    );
 
-                let (sender, receiver) = tokio::sync::mpsc::channel(10);
-                let _ = ch.send((msg.0, receiver)).await;
-                // self.op_move_events_since.insert(msg.hash(), sender);
+                let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
+                let _ = ch.send((topic.0, sender)).await;
+                tokio::spawn({
+                    let cmd_sender = self.cmd_sender.clone();
+                    async move {
+                        while let Some(msg) = receiver.recv().await {
+                            let msg = bincode::serialize(&msg).unwrap();
+                            if cmd_sender
+                                .send(Command::SendEvent(topic.topic(), msg))
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
+                    }
+                });
             }
             (t, true) if self.op_move_events_since_subs.contains_key(&t) => {
                 let Ok(msg) = bincode::deserialize(&data) else {

@@ -53,6 +53,14 @@ enum SubscribeCommand {
     LumioOpSol(tokio::sync::mpsc::Sender<SlotAttribute>),
     /// Events from lumio to op-move
     LumioOpMove(tokio::sync::mpsc::Sender<SlotAttribute>),
+    /// Give away streams from `OpMoveSince` subscription
+    OpMoveSinceHandler(
+        tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>,
+    ),
+    /// Give away streams from `OpSolSince` subscription
+    OpSolSinceHandler(
+        tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>,
+    ),
 }
 
 impl SubscribeCommand {
@@ -64,6 +72,8 @@ impl SubscribeCommand {
             Self::OpSolSince { since, .. } => topics::OpSolEventsSince(*since).topic(),
             Self::LumioOpSol(_) => topics::LumioSolEvents.topic(),
             Self::LumioOpMove(_) => topics::LumioMoveEvents.topic(),
+            Self::OpMoveSinceHandler(_) => topics::OpMoveCommands.topic(),
+            Self::OpSolSinceHandler(_) => topics::OpSolCommands.topic(),
         }
     }
 }
@@ -149,12 +159,8 @@ impl Node {
             Err(gossipsub::PublishError::InsufficientPeers) => tracing::warn!("No peers for auth"),
             Err(err) => return Err(err).context("Failed to auth"),
         }
-        let (cmd_sender, cmd_receiver) = tokio::sync::mpsc::channel(100);
-
-        Ok((
-            Self { cmd_sender },
-            NodeRunner::new(swarm, jwt, cmd_receiver),
-        ))
+        let (node_runner, cmd_sender) = NodeRunner::new(swarm, jwt);
+        Ok((Self { cmd_sender }, node_runner))
     }
 
     async fn subscribe_event(&self, cmd: SubscribeCommand) -> Result<()> {
@@ -162,6 +168,30 @@ impl Node {
             .send(Command::Subscribe(cmd))
             .await
             .context("Node runner is probably dead")
+    }
+
+    pub async fn handle_op_move_since(
+        &self,
+    ) -> Result<
+        impl Stream<Item = (Slot, impl Sink<SlotPayloadWithEvents> + Unpin + 'static)> + Unpin + 'static,
+    > {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::OpMoveSinceHandler(sender))
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver)
+            .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
+    }
+
+    pub async fn handle_op_sol_since(
+        &self,
+    ) -> Result<
+        impl Stream<Item = (Slot, impl Sink<SlotPayloadWithEvents> + Unpin + 'static)> + Unpin + 'static,
+    > {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::OpSolSinceHandler(sender))
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver)
+            .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
     }
 
     pub async fn subscribe_op_move_events(
@@ -212,6 +242,15 @@ impl Node {
     }
 
     pub async fn subscribe_lumio_op_move_events(
+        &self,
+    ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(20);
+        self.subscribe_event(SubscribeCommand::LumioOpMove(sender))
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
+    }
+
+    pub async fn subscribe_lumio_op_move_events_since(
         &self,
     ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(20);
