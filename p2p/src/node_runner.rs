@@ -33,8 +33,8 @@ pub struct NodeRunner {
         tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Receiver<SlotPayloadWithEvents>)>,
     >,
 
-    op_move_events_since: HashMap<TopicHash, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
-    op_sol_events_since: HashMap<TopicHash, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
+    op_move_events_since_subs: HashMap<TopicHash, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
+    op_sol_events_since_subs: HashMap<TopicHash, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -61,8 +61,8 @@ impl NodeRunner {
             lumio_move_events: None,
             op_move_commands: None,
             op_sol_commands: None,
-            op_move_events_since: Default::default(),
-            op_sol_events_since: Default::default(),
+            op_move_events_since_subs: Default::default(),
+            op_sol_events_since_subs: Default::default(),
         }
     }
 
@@ -99,7 +99,7 @@ impl NodeRunner {
             SubscribeCommand::LumioOpSol(sender) => self.lumio_sol_events = Some(sender),
             SubscribeCommand::LumioOpMove(sender) => self.lumio_move_events = Some(sender),
             SubscribeCommand::OpMoveSince { sender, since } => {
-                self.op_move_events_since
+                self.op_move_events_since_subs
                     .insert(topics::OpMoveEventsSince(since).hash(), sender);
                 self.publish_event(
                     topics::OpMoveCommands.hash(),
@@ -107,7 +107,7 @@ impl NodeRunner {
                 )
             }
             SubscribeCommand::OpSolSince { sender, since } => {
-                self.op_sol_events_since
+                self.op_sol_events_since_subs
                     .insert(topics::OpSolEventsSince(since).hash(), sender);
                 self.publish_event(
                     topics::OpSolCommands.hash(),
@@ -208,7 +208,7 @@ impl NodeRunner {
 
                 let (sender, receiver) = tokio::sync::mpsc::channel(10);
                 let _ = ch.send((msg.0, receiver)).await;
-                self.op_move_events_since.insert(msg.hash(), sender);
+                // self.op_move_events_since.insert(msg.hash(), receiver);
             }
             (t, true) if t == topics::OpSolCommands.hash() => {
                 let ch = self
@@ -229,22 +229,22 @@ impl NodeRunner {
 
                 let (sender, receiver) = tokio::sync::mpsc::channel(10);
                 let _ = ch.send((msg.0, receiver)).await;
-                self.op_move_events_since.insert(msg.hash(), sender);
+                // self.op_move_events_since.insert(msg.hash(), sender);
             }
-            (t, true) if self.op_move_events_since.contains_key(&t) => {
+            (t, true) if self.op_move_events_since_subs.contains_key(&t) => {
                 let Ok(msg) = bincode::deserialize(&data) else {
                     tracing::debug!("Failed to decode op move commands. Skipping...");
                     return;
                 };
-                let sender = self.op_move_events_since.get(&t).unwrap();
+                let sender = self.op_move_events_since_subs.get(&t).unwrap();
                 let _ = sender.send(msg).await;
             }
-            (t, true) if self.op_move_events_since.contains_key(&t) => {
+            (t, true) if self.op_sol_events_since_subs.contains_key(&t) => {
                 let Ok(msg) = bincode::deserialize(&data) else {
                     tracing::debug!("Failed to decode op move commands. Skipping...");
                     return;
                 };
-                let sender = self.op_move_events_since.get(&t).unwrap();
+                let sender = self.op_sol_events_since_subs.get(&t).unwrap();
                 let _ = sender.send(msg).await;
             }
             (topic, true) => tracing::debug!(?topic, "Ignoring message from unknown topic"),
