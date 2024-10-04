@@ -8,7 +8,6 @@ use libp2p::{
 };
 use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
 use lumio_types::Slot;
-use serde::{Deserialize, Serialize};
 
 use std::collections::{HashMap, HashSet};
 
@@ -36,12 +35,6 @@ pub struct NodeRunner {
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>>,
     op_sol_events_since_handler:
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>>,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-struct Auth {
-    peer_id: PeerId,
-    claim: String,
 }
 
 impl NodeRunner {

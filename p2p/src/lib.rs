@@ -287,24 +287,34 @@ impl Node {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct Auth {
+    peer_id: libp2p::PeerId,
+    claim: String,
+}
+
 pub(crate) mod topics {
     use libp2p::gossipsub::{IdentTopic, TopicHash};
+    use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
     use serde::{Deserialize, Serialize};
 
     use std::sync::LazyLock;
 
-    pub trait Topic {
+    pub(crate) trait Topic {
+        type Msg: serde::Serialize + serde::de::DeserializeOwned;
+
         fn topic(&self) -> IdentTopic;
 
         fn hash(&self) -> TopicHash;
     }
 
     macro_rules! topic {
-        ( $(struct $name:ident($topic:literal) ;)* ) => {$(
+        ( $(struct $name:ident <$msg:ty> ($topic:literal) ;)* ) => {$(
             #[derive(Clone, Copy, Debug, Default)]
-            pub struct $name;
+            pub(crate) struct $name;
 
             impl Topic for $name {
+                type Msg = $msg;
                 fn topic(&self) -> IdentTopic {
                     static TOPIC: LazyLock<IdentTopic> = LazyLock::new(|| IdentTopic::new(concat!("/lumio/v1/", $topic)));
                     TOPIC.clone()
@@ -318,20 +328,21 @@ pub(crate) mod topics {
     }
 
     topic! {
-        struct Auth("auth");
-        struct OpMoveEvents("op_move_events");
-        struct OpSolEvents("op_sol_events");
-        struct LumioSolEvents("lumio_sol_events");
-        struct LumioMoveEvents("lumio_move_events");
+        struct Auth<crate::Auth>("auth");
+        struct OpMoveEvents<SlotPayloadWithEvents>("op_move_events");
+        struct OpSolEvents<SlotPayloadWithEvents>("op_sol_events");
+        struct LumioSolEvents<SlotAttribute>("lumio_sol_events");
+        struct LumioMoveEvents<SlotAttribute>("lumio_move_events");
 
-        struct OpSolCommands("op_sol_cmds");
-        struct OpMoveCommands("op_move_cmds");
+        struct OpSolCommands<OpSolEventsSince>("op_sol_cmds");
+        struct OpMoveCommands<OpMoveEventsSince>("op_move_cmds");
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct OpSolEventsSince(pub lumio_types::Slot);
 
     impl Topic for OpSolEventsSince {
+        type Msg = SlotPayloadWithEvents;
         fn topic(&self) -> IdentTopic {
             IdentTopic::new(format!("/lumio/v1/op_sol_events/since/{}", self.0))
         }
@@ -344,6 +355,7 @@ pub(crate) mod topics {
     pub struct OpMoveEventsSince(pub lumio_types::Slot);
 
     impl Topic for OpMoveEventsSince {
+        type Msg = SlotPayloadWithEvents;
         fn topic(&self) -> IdentTopic {
             IdentTopic::new(format!("/lumio/v1/op_move_events/since/{}", self.0))
         }
