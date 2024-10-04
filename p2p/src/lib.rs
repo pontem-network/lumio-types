@@ -5,6 +5,7 @@ use futures::prelude::*;
 use libp2p::multiaddr::Multiaddr;
 use libp2p::{gossipsub, mdns};
 use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
+use lumio_types::Slot;
 use serde::{Deserialize, Serialize};
 
 use std::hash::{Hash, Hasher};
@@ -36,39 +37,50 @@ pub struct Config {
 enum SubscribeCommand {
     /// Events from op-move to lumio
     OpMove(tokio::sync::mpsc::Sender<SlotPayloadWithEvents>),
+    /// Events from op-move to lumio
+    OpMoveSince {
+        since: Slot,
+        sender: tokio::sync::mpsc::Sender<SlotPayloadWithEvents>,
+    },
     /// Events from op-sol to lumio
     OpSol(tokio::sync::mpsc::Sender<SlotPayloadWithEvents>),
+    /// Events from op-sol to lumio
+    OpSolSince {
+        since: Slot,
+        sender: tokio::sync::mpsc::Sender<SlotPayloadWithEvents>,
+    },
     /// Events from lumio to op-sol
     LumioOpSol(tokio::sync::mpsc::Sender<SlotAttribute>),
     /// Events from lumio to op-move
     LumioOpMove(tokio::sync::mpsc::Sender<SlotAttribute>),
+    /// Give away streams from `OpMoveSince` subscription
+    OpMoveSinceHandler(
+        tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>,
+    ),
+    /// Give away streams from `OpSolSince` subscription
+    OpSolSinceHandler(
+        tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>,
+    ),
 }
 
 impl SubscribeCommand {
-    pub fn topic(&self) -> &gossipsub::IdentTopic {
+    pub fn topic(&self) -> gossipsub::IdentTopic {
         match self {
-            Self::OpMove(_) => topics::OpMoveEvents::topic(),
-            Self::OpSol(_) => topics::OpSolEvents::topic(),
-            Self::LumioOpSol(_) => topics::LumioSolEvents::topic(),
-            Self::LumioOpMove(_) => topics::LumioMoveEvents::topic(),
+            Self::OpMove(_) => topics::OpMoveEvents.topic(),
+            Self::OpMoveSince { since, .. } => topics::OpMoveEventsSince(*since).topic(),
+            Self::OpSol(_) => topics::OpSolEvents.topic(),
+            Self::OpSolSince { since, .. } => topics::OpSolEventsSince(*since).topic(),
+            Self::LumioOpSol(_) => topics::LumioSolEvents.topic(),
+            Self::LumioOpMove(_) => topics::LumioMoveEvents.topic(),
+            Self::OpMoveSinceHandler(_) => topics::OpMoveCommands.topic(),
+            Self::OpSolSinceHandler(_) => topics::OpSolCommands.topic(),
         }
     }
 }
 
-enum SendEventCommand {
-    /// Events from op-move to lumio
-    OpMove(SlotPayloadWithEvents),
-    /// Events from op-sol to lumio
-    OpSol(SlotPayloadWithEvents),
-    /// Events from lumio to op-sol
-    LumioOpSol(SlotAttribute),
-    /// Events from lumio to op-move
-    LumioOpMove(SlotAttribute),
-}
-
 enum Command {
     Subscribe(SubscribeCommand),
-    SendEvent(SendEventCommand),
+    SendEvent(gossipsub::IdentTopic, Vec<u8>),
 }
 
 #[derive(Debug, Clone)]
@@ -135,128 +147,171 @@ impl Node {
         swarm
             .behaviour_mut()
             .gossipsub
-            .subscribe(topics::Auth::topic())?;
+            .subscribe(&topics::Auth.topic())?;
 
         match swarm
             .behaviour_mut()
             .gossipsub
-            .publish(topics::Auth::topic().clone(), jwt.claim()?)
+            .publish(topics::Auth.topic().clone(), jwt.claim()?)
         {
             Ok(_) => tracing::debug!("Send auth message"),
             // We don't care if there no peers at this stage. We'll auth once someone subscribes
             Err(gossipsub::PublishError::InsufficientPeers) => tracing::warn!("No peers for auth"),
             Err(err) => return Err(err).context("Failed to auth"),
         }
-        let (cmd_sender, cmd_receiver) = tokio::sync::mpsc::channel(100);
+        let (node_runner, cmd_sender) = NodeRunner::new(swarm, jwt);
+        Ok((Self { cmd_sender }, node_runner))
+    }
 
-        Ok((
-            Self { cmd_sender },
-            NodeRunner::new(swarm, jwt, cmd_receiver),
-        ))
+    async fn subscribe_event(&self, cmd: SubscribeCommand) -> Result<()> {
+        self.cmd_sender
+            .send(Command::Subscribe(cmd))
+            .await
+            .context("Node runner is probably dead")
+    }
+
+    pub async fn handle_op_move_since(
+        &self,
+    ) -> Result<
+        impl Stream<Item = (Slot, impl Sink<SlotPayloadWithEvents> + Unpin + 'static)> + Unpin + 'static,
+    > {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::OpMoveSinceHandler(sender))
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver)
+            .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
+    }
+
+    pub async fn handle_op_sol_since(
+        &self,
+    ) -> Result<
+        impl Stream<Item = (Slot, impl Sink<SlotPayloadWithEvents> + Unpin + 'static)> + Unpin + 'static,
+    > {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::OpSolSinceHandler(sender))
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver)
+            .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
     }
 
     pub async fn subscribe_op_move_events(
-        &mut self,
+        &self,
     ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
-        self.cmd_sender
-            .send(Command::Subscribe(SubscribeCommand::OpMove(sender)))
-            .await
-            .context("Node runner is probably dead")?;
+        self.subscribe_event(SubscribeCommand::OpMove(sender))
+            .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
     pub async fn subscribe_op_sol_events(
-        &mut self,
+        &self,
     ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
-        self.cmd_sender
-            .send(Command::Subscribe(SubscribeCommand::OpSol(sender)))
-            .await
-            .context("Node runner is probably dead")?;
+        self.subscribe_event(SubscribeCommand::OpSol(sender))
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
+    }
+
+    pub async fn subscribe_op_move_events_since(
+        &self,
+        since: Slot,
+    ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::OpMoveSince { since, sender })
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
+    }
+
+    pub async fn subscribe_op_sol_events_since(
+        &self,
+        since: Slot,
+    ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::OpSolSince { since, sender })
+            .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
     pub async fn subscribe_lumio_op_sol_events(
-        &mut self,
+        &self,
     ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(20);
-        self.cmd_sender
-            .send(Command::Subscribe(SubscribeCommand::LumioOpSol(sender)))
-            .await
-            .context("Node runner is probably dead")?;
+        self.subscribe_event(SubscribeCommand::LumioOpSol(sender))
+            .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
     pub async fn subscribe_lumio_op_move_events(
-        &mut self,
+        &self,
     ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(20);
-        self.cmd_sender
-            .send(Command::Subscribe(SubscribeCommand::LumioOpMove(sender)))
-            .await
-            .context("Node runner is probably dead")?;
+        self.subscribe_event(SubscribeCommand::LumioOpMove(sender))
+            .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
-    pub async fn send_lumio_op_move(&mut self, events: SlotAttribute) -> Result<()> {
+    pub async fn subscribe_lumio_op_move_events_since(
+        &self,
+    ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(20);
+        self.subscribe_event(SubscribeCommand::LumioOpMove(sender))
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
+    }
+
+    async fn send_event(&self, topic: impl Topic, event: impl serde::Serialize) -> Result<()> {
         self.cmd_sender
-            .send(Command::SendEvent(SendEventCommand::LumioOpMove(events)))
+            .send(Command::SendEvent(
+                topic.topic(),
+                bincode::serialize(&event).unwrap(),
+            ))
             .await
             .context("Node runner is probably dead")?;
         Ok(())
     }
 
-    pub async fn send_lumio_op_sol(&mut self, events: SlotAttribute) -> Result<()> {
-        self.cmd_sender
-            .send(Command::SendEvent(SendEventCommand::LumioOpSol(events)))
-            .await
-            .context("Node runner is probably dead")?;
-        Ok(())
+    pub async fn send_lumio_op_move(&self, events: SlotAttribute) -> Result<()> {
+        self.send_event(topics::LumioMoveEvents, events).await
     }
 
-    pub async fn send_op_sol(&mut self, artifacts: SlotPayloadWithEvents) -> Result<()> {
-        self.cmd_sender
-            .send(Command::SendEvent(SendEventCommand::OpSol(artifacts)))
-            .await
-            .context("Node runner is probably dead")?;
-        Ok(())
+    pub async fn send_lumio_op_sol(&self, events: SlotAttribute) -> Result<()> {
+        self.send_event(topics::LumioSolEvents, events).await
     }
 
-    pub async fn send_op_move(&mut self, artifacts: SlotPayloadWithEvents) -> Result<()> {
-        self.cmd_sender
-            .send(Command::SendEvent(SendEventCommand::OpMove(artifacts)))
-            .await
-            .context("Node runner is probably dead")?;
-        Ok(())
+    pub async fn send_op_sol(&self, artifacts: SlotPayloadWithEvents) -> Result<()> {
+        self.send_event(topics::OpSolEvents, artifacts).await
+    }
+
+    pub async fn send_op_move(&self, artifacts: SlotPayloadWithEvents) -> Result<()> {
+        self.send_event(topics::OpMoveEvents, artifacts).await
     }
 }
 
 pub(crate) mod topics {
     use libp2p::gossipsub::{IdentTopic, TopicHash};
+    use serde::{Deserialize, Serialize};
 
     use std::sync::LazyLock;
 
     pub trait Topic {
-        fn topic() -> &'static IdentTopic;
+        fn topic(&self) -> IdentTopic;
 
-        fn hash() -> &'static TopicHash;
+        fn hash(&self) -> TopicHash;
     }
 
     macro_rules! topic {
         ( $(struct $name:ident($topic:literal) ;)* ) => {$(
+            #[derive(Clone, Copy, Debug, Default)]
             pub struct $name;
 
             impl Topic for $name {
-                fn topic() -> &'static IdentTopic {
-                    #[allow(non_upper_case_globals)]
-                    static $name: LazyLock<IdentTopic> = LazyLock::new(|| IdentTopic::new(concat!("/lumio/v1/", $topic)));
-                    &$name
+                fn topic(&self) -> IdentTopic {
+                    static TOPIC: LazyLock<IdentTopic> = LazyLock::new(|| IdentTopic::new(concat!("/lumio/v1/", $topic)));
+                    TOPIC.clone()
                 }
-                fn hash() -> &'static TopicHash {
-                    #[allow(non_upper_case_globals)]
-                    static $name: LazyLock<TopicHash> = LazyLock::new(|| $name::topic().hash());
-                    &$name
+                fn hash(&self) -> TopicHash {
+                    static HASH: LazyLock<TopicHash> = LazyLock::new(|| $name.topic().hash());
+                    HASH.clone()
                 }
             }
         )*}
@@ -268,5 +323,32 @@ pub(crate) mod topics {
         struct OpSolEvents("op_sol_events");
         struct LumioSolEvents("lumio_sol_events");
         struct LumioMoveEvents("lumio_move_events");
+
+        struct OpSolCommands("op_sol_cmds");
+        struct OpMoveCommands("op_move_cmds");
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct OpSolEventsSince(pub lumio_types::Slot);
+
+    impl Topic for OpSolEventsSince {
+        fn topic(&self) -> IdentTopic {
+            IdentTopic::new(format!("/lumio/v1/op_sol_events/since/{}", self.0))
+        }
+        fn hash(&self) -> TopicHash {
+            self.topic().hash()
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct OpMoveEventsSince(pub lumio_types::Slot);
+
+    impl Topic for OpMoveEventsSince {
+        fn topic(&self) -> IdentTopic {
+            IdentTopic::new(format!("/lumio/v1/op_move_events/since/{}", self.0))
+        }
+        fn hash(&self) -> TopicHash {
+            self.topic().hash()
+        }
     }
 }
