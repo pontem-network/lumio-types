@@ -16,8 +16,8 @@ use crate::{
     topics, Auth, Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, SubscribeCommand,
 };
 
-trait Handle<T: Topic> {
-    fn handle(&mut self, msg: T::Msg) -> impl Future<Output = Result<()>>;
+trait HandleMsg<T: Topic> {
+    fn handle_msg(&mut self, msg: T::Msg) -> impl Future<Output = Result<()>>;
 }
 
 pub struct NodeRunner {
@@ -43,8 +43,8 @@ pub struct NodeRunner {
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>>,
 }
 
-impl Handle<topics::Auth> for NodeRunner {
-    async fn handle(&mut self, Auth { peer_id, claim }: Auth) -> Result<()> {
+impl HandleMsg<topics::Auth> for NodeRunner {
+    async fn handle_msg(&mut self, Auth { peer_id, claim }: Auth) -> Result<()> {
         self.jwt
             .decode(claim)
             .context("Failed to decode JWT claim")?;
@@ -57,8 +57,8 @@ macro_rules! impl_handle_channel {
     ($node_runner:ty {
         $($topic:ty => $field:ident),* $(,)?
     }) => {$(
-        impl Handle<$topic> for $node_runner {
-            async fn handle(&mut self, msg: <$topic as topics::Topic>::Msg) -> Result<()> {
+        impl HandleMsg<$topic> for $node_runner {
+            async fn handle_msg(&mut self, msg: <$topic as topics::Topic>::Msg) -> Result<()> {
                 // TODO: unsub if noone listens
                 let _ = self
                     . $field
@@ -82,12 +82,12 @@ impl_handle_channel! {
 }
 
 impl NodeRunner {
-    async fn handle<T>(&mut self, msg: T::Msg) -> Result<()>
+    async fn handle_msg<T>(&mut self, msg: T::Msg) -> Result<()>
     where
         T: Topic,
-        Self: Handle<T>,
+        Self: HandleMsg<T>,
     {
-        Handle::<T>::handle(self, msg).await
+        HandleMsg::<T>::handle_msg(self, msg).await
     }
 
     pub(crate) fn new(
@@ -198,7 +198,7 @@ impl NodeRunner {
                     tracing::debug!("Failed to decode op move event. Skipping...");
                     return;
                 };
-                let Err(err) = self.handle::<topics::Auth>(auth).await else {
+                let Err(err) = self.handle_msg::<topics::Auth>(auth).await else {
                     return;
                 };
                 tracing::debug!("Failed to auth peer {source}: {err:?}");
@@ -209,7 +209,7 @@ impl NodeRunner {
                     return;
                 };
 
-                let _ = self.handle::<topics::OpMoveEvents>(msg).await;
+                let _ = self.handle_msg::<topics::OpMoveEvents>(msg).await;
             }
             (t, true) if t == topics::OpSolEvents.hash() => {
                 let Ok(msg) = bincode::deserialize(&data) else {
@@ -217,7 +217,7 @@ impl NodeRunner {
                     return;
                 };
 
-                let _ = self.handle::<topics::OpSolEvents>(msg).await;
+                let _ = self.handle_msg::<topics::OpSolEvents>(msg).await;
             }
             (t, true) if t == topics::LumioSolEvents.hash() => {
                 let Ok(msg) = bincode::deserialize(&data) else {
@@ -225,7 +225,7 @@ impl NodeRunner {
                     return;
                 };
 
-                let _ = self.handle::<topics::LumioSolEvents>(msg).await;
+                let _ = self.handle_msg::<topics::LumioSolEvents>(msg).await;
             }
             (t, true) if t == topics::LumioMoveEvents.hash() => {
                 let Ok(msg) = bincode::deserialize(&data) else {
@@ -233,7 +233,7 @@ impl NodeRunner {
                     return;
                 };
 
-                let _ = self.handle::<topics::LumioMoveEvents>(msg).await;
+                let _ = self.handle_msg::<topics::LumioMoveEvents>(msg).await;
             }
             (t, true) if t == topics::OpMoveCommands.hash() => {
                 let ch = self
