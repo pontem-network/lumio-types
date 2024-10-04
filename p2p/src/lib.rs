@@ -157,14 +157,19 @@ impl Node {
         ))
     }
 
+    async fn subscribe_event(&self, cmd: SubscribeCommand) -> Result<()> {
+        self.cmd_sender
+            .send(Command::Subscribe(cmd))
+            .await
+            .context("Node runner is probably dead")
+    }
+
     pub async fn subscribe_op_move_events(
         &self,
     ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
-        self.cmd_sender
-            .send(Command::Subscribe(SubscribeCommand::OpMove(sender)))
-            .await
-            .context("Node runner is probably dead")?;
+        self.subscribe_event(SubscribeCommand::OpMove(sender))
+            .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
@@ -172,10 +177,8 @@ impl Node {
         &self,
     ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
-        self.cmd_sender
-            .send(Command::Subscribe(SubscribeCommand::OpSol(sender)))
-            .await
-            .context("Node runner is probably dead")?;
+        self.subscribe_event(SubscribeCommand::OpSol(sender))
+            .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
@@ -184,13 +187,8 @@ impl Node {
         since: Slot,
     ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
-        self.cmd_sender
-            .send(Command::Subscribe(SubscribeCommand::OpMoveSince {
-                since,
-                sender,
-            }))
-            .await
-            .context("Node runner is probably dead")?;
+        self.subscribe_event(SubscribeCommand::OpMoveSince { since, sender })
+            .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
@@ -199,13 +197,8 @@ impl Node {
         since: Slot,
     ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
-        self.cmd_sender
-            .send(Command::Subscribe(SubscribeCommand::OpSolSince {
-                since,
-                sender,
-            }))
-            .await
-            .context("Node runner is probably dead")?;
+        self.subscribe_event(SubscribeCommand::OpSolSince { since, sender })
+            .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
@@ -213,10 +206,8 @@ impl Node {
         &self,
     ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(20);
-        self.cmd_sender
-            .send(Command::Subscribe(SubscribeCommand::LumioOpSol(sender)))
-            .await
-            .context("Node runner is probably dead")?;
+        self.subscribe_event(SubscribeCommand::LumioOpSol(sender))
+            .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
@@ -224,10 +215,8 @@ impl Node {
         &self,
     ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(20);
-        self.cmd_sender
-            .send(Command::Subscribe(SubscribeCommand::LumioOpMove(sender)))
-            .await
-            .context("Node runner is probably dead")?;
+        self.subscribe_event(SubscribeCommand::LumioOpMove(sender))
+            .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
