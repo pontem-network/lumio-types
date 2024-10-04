@@ -34,6 +34,7 @@ tokio-util.workspace = true
 lumio-types.workspace = true
 
 [dev-dependencies]
+portpicker.workspace = true
 tracing-subscriber = { workspace = true, features = [
   "ansi",
   "env-filter",
