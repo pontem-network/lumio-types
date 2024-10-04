@@ -12,7 +12,13 @@ use lumio_types::Slot;
 use std::collections::{HashMap, HashSet};
 
 use crate::topics::Topic;
-use crate::{topics, Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, SubscribeCommand};
+use crate::{
+    topics, Auth, Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, SubscribeCommand,
+};
+
+trait Handle<T: Topic> {
+    fn handle(&mut self, msg: T::Msg) -> impl Future<Output = Result<()>>;
+}
 
 pub struct NodeRunner {
     swarm: Swarm<LumioBehaviour>,
@@ -37,7 +43,53 @@ pub struct NodeRunner {
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>>,
 }
 
+impl Handle<topics::Auth> for NodeRunner {
+    async fn handle(&mut self, Auth { peer_id, claim }: Auth) -> Result<()> {
+        self.jwt
+            .decode(claim)
+            .context("Failed to decode JWT claim")?;
+        self.authorized.insert(peer_id);
+        Ok(())
+    }
+}
+
+macro_rules! impl_handle_channel {
+    ($node_runner:ty {
+        $($topic:ty => $field:ident),* $(,)?
+    }) => {$(
+        impl Handle<$topic> for $node_runner {
+            async fn handle(&mut self, msg: <$topic as topics::Topic>::Msg) -> Result<()> {
+                // TODO: unsub if noone listens
+                let _ = self
+                    . $field
+                    .as_ref()
+                    .expect("We should always have a channel if we subscribed to topic")
+                    .send(msg)
+                    .await;
+                Ok(())
+            }
+        }
+    )*}
+}
+
+impl_handle_channel! {
+    NodeRunner {
+        topics::OpMoveEvents => op_move_events,
+        topics::OpSolEvents => op_sol_events,
+        topics::LumioSolEvents => lumio_sol_events,
+        topics::LumioMoveEvents => lumio_move_events,
+    }
+}
+
 impl NodeRunner {
+    async fn handle<T>(&mut self, msg: T::Msg) -> Result<()>
+    where
+        T: Topic,
+        Self: Handle<T>,
+    {
+        Handle::<T>::handle(self, msg).await
+    }
+
     pub(crate) fn new(
         swarm: Swarm<LumioBehaviour>,
         jwt: JwtSecret,
@@ -129,76 +181,59 @@ impl NodeRunner {
     }
 
     async fn handle_message(&mut self, msg: libp2p::gossipsub::Message) {
-        let libp2p::gossipsub::Message {
+        let gossipsub::Message {
             data,
             topic,
             source,
             ..
-        } = msg;
+        } = &msg;
         let Some(source) = source else {
             tracing::debug!(?topic, "Ignoring message as sender is unknown");
             return;
         };
 
-        match (topic, self.authorized.contains(&source)) {
+        match (topic.clone(), self.authorized.contains(&source)) {
             (t, _) if t == topics::Auth.hash() => {
-                let Ok(Auth { peer_id, claim }) = bincode::deserialize(&data) else {
+                let Ok(auth) = bincode::deserialize(&data) else {
                     tracing::debug!("Failed to decode op move event. Skipping...");
                     return;
                 };
-
-                let Err(err) = self.authorize(peer_id, claim) else {
+                let Err(err) = self.handle::<topics::Auth>(auth).await else {
                     return;
                 };
                 tracing::debug!("Failed to auth peer {source}: {err:?}");
             }
             (t, true) if t == topics::OpMoveEvents.hash() => {
-                let ch = self
-                    .op_move_events
-                    .as_mut()
-                    .expect("We should always have a channel if we subscribed to topic");
                 let Ok(msg) = bincode::deserialize(&data) else {
                     tracing::debug!("Failed to decode op move event. Skipping...");
                     return;
                 };
 
-                let _ = ch.send(msg).await;
+                let _ = self.handle::<topics::OpMoveEvents>(msg).await;
             }
             (t, true) if t == topics::OpSolEvents.hash() => {
-                let ch = self
-                    .op_sol_events
-                    .as_mut()
-                    .expect("We should always have a channel if we subscribed to topic");
                 let Ok(msg) = bincode::deserialize(&data) else {
                     tracing::debug!("Failed to decode op sol event. Skipping...");
                     return;
                 };
 
-                let _ = ch.send(msg).await;
+                let _ = self.handle::<topics::OpSolEvents>(msg).await;
             }
             (t, true) if t == topics::LumioSolEvents.hash() => {
-                let ch = self
-                    .lumio_sol_events
-                    .as_mut()
-                    .expect("We should always have a channel if we subscribed to topic");
                 let Ok(msg) = bincode::deserialize(&data) else {
                     tracing::debug!("Failed to decode lumio sol event. Skipping...");
                     return;
                 };
 
-                let _ = ch.send(msg).await;
+                let _ = self.handle::<topics::LumioSolEvents>(msg).await;
             }
             (t, true) if t == topics::LumioMoveEvents.hash() => {
-                let ch = self
-                    .lumio_move_events
-                    .as_mut()
-                    .expect("We should always have a channel if we subscribed to topic");
                 let Ok(msg) = bincode::deserialize(&data) else {
                     tracing::debug!("Failed to decode lumio move event. Skipping...");
                     return;
                 };
 
-                let _ = ch.send(msg).await;
+                let _ = self.handle::<topics::LumioMoveEvents>(msg).await;
             }
             (t, true) if t == topics::OpMoveCommands.hash() => {
                 let ch = self
@@ -329,13 +364,5 @@ impl NodeRunner {
                 }
             }
         }
-    }
-
-    pub fn authorize(&mut self, source: PeerId, claim: String) -> Result<()> {
-        self.jwt
-            .decode(claim)
-            .context("Failed to decode JWT claim")?;
-        self.authorized.insert(source);
-        Ok(())
     }
 }
