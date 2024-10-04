@@ -68,20 +68,9 @@ impl SubscribeCommand {
     }
 }
 
-enum SendEventCommand {
-    /// Events from op-move to lumio
-    OpMove(SlotPayloadWithEvents),
-    /// Events from op-sol to lumio
-    OpSol(SlotPayloadWithEvents),
-    /// Events from lumio to op-sol
-    LumioOpSol(SlotAttribute),
-    /// Events from lumio to op-move
-    LumioOpMove(SlotAttribute),
-}
-
 enum Command {
     Subscribe(SubscribeCommand),
-    SendEvent(SendEventCommand),
+    SendEvent(gossipsub::IdentTopic, Vec<u8>),
 }
 
 #[derive(Debug, Clone)]
@@ -242,36 +231,31 @@ impl Node {
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
-    pub async fn send_lumio_op_move(&self, events: SlotAttribute) -> Result<()> {
+    async fn send_event(&self, topic: impl Topic, event: impl serde::Serialize) -> Result<()> {
         self.cmd_sender
-            .send(Command::SendEvent(SendEventCommand::LumioOpMove(events)))
+            .send(Command::SendEvent(
+                topic.topic(),
+                bincode::serialize(&event).unwrap(),
+            ))
             .await
             .context("Node runner is probably dead")?;
         Ok(())
+    }
+
+    pub async fn send_lumio_op_move(&self, events: SlotAttribute) -> Result<()> {
+        self.send_event(topics::LumioMoveEvents, events).await
     }
 
     pub async fn send_lumio_op_sol(&self, events: SlotAttribute) -> Result<()> {
-        self.cmd_sender
-            .send(Command::SendEvent(SendEventCommand::LumioOpSol(events)))
-            .await
-            .context("Node runner is probably dead")?;
-        Ok(())
+        self.send_event(topics::LumioSolEvents, events).await
     }
 
     pub async fn send_op_sol(&self, artifacts: SlotPayloadWithEvents) -> Result<()> {
-        self.cmd_sender
-            .send(Command::SendEvent(SendEventCommand::OpSol(artifacts)))
-            .await
-            .context("Node runner is probably dead")?;
-        Ok(())
+        self.send_event(topics::OpSolEvents, artifacts).await
     }
 
     pub async fn send_op_move(&self, artifacts: SlotPayloadWithEvents) -> Result<()> {
-        self.cmd_sender
-            .send(Command::SendEvent(SendEventCommand::OpMove(artifacts)))
-            .await
-            .context("Node runner is probably dead")?;
-        Ok(())
+        self.send_event(topics::OpMoveEvents, artifacts).await
     }
 }
 

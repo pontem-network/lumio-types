@@ -13,10 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 use crate::topics::Topic;
-use crate::{
-    topics, Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, SendEventCommand,
-    SubscribeCommand,
-};
+use crate::{topics, Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, SubscribeCommand};
 
 pub struct NodeRunner {
     swarm: Swarm<LumioBehaviour>,
@@ -84,49 +81,38 @@ impl NodeRunner {
     }
 
     fn handle_command(&mut self, cmd: Command) {
+        let cmd = match cmd {
+            Command::Subscribe(cmd) => cmd,
+            Command::SendEvent(topic, ev) => {
+                self.publish_event(topic.hash(), &ev);
+                return;
+            }
+        };
+        self.swarm
+            .behaviour_mut()
+            .gossipsub
+            .subscribe(&cmd.topic())
+            .expect("Something went terribly wrong, as we failed to subscribe to some topic");
         match cmd {
-            Command::Subscribe(cmd) => {
-                self.swarm
-                    .behaviour_mut()
-                    .gossipsub
-                    .subscribe(&cmd.topic())
-                    .expect(
-                        "Something went terribly wrong, as we failed to subscribe to some topic",
-                    );
-                match cmd {
-                    SubscribeCommand::OpMove(sender) => self.op_move_events = Some(sender),
-                    SubscribeCommand::OpSol(sender) => self.op_sol_events = Some(sender),
-                    SubscribeCommand::LumioOpSol(sender) => self.lumio_sol_events = Some(sender),
-                    SubscribeCommand::LumioOpMove(sender) => self.lumio_move_events = Some(sender),
-                    SubscribeCommand::OpMoveSince { sender, since } => {
-                        self.op_move_events_since
-                            .insert(topics::OpMoveEventsSince(since).hash(), sender);
-                        self.publish_event(
-                            topics::OpMoveCommands.hash(),
-                            &topics::OpMoveEventsSince(since),
-                        )
-                    }
-                    SubscribeCommand::OpSolSince { sender, since } => {
-                        self.op_sol_events_since
-                            .insert(topics::OpSolEventsSince(since).hash(), sender);
-                        self.publish_event(
-                            topics::OpSolCommands.hash(),
-                            &topics::OpSolEventsSince(since),
-                        )
-                    }
-                }
+            SubscribeCommand::OpMove(sender) => self.op_move_events = Some(sender),
+            SubscribeCommand::OpSol(sender) => self.op_sol_events = Some(sender),
+            SubscribeCommand::LumioOpSol(sender) => self.lumio_sol_events = Some(sender),
+            SubscribeCommand::LumioOpMove(sender) => self.lumio_move_events = Some(sender),
+            SubscribeCommand::OpMoveSince { sender, since } => {
+                self.op_move_events_since
+                    .insert(topics::OpMoveEventsSince(since).hash(), sender);
+                self.publish_event(
+                    topics::OpMoveCommands.hash(),
+                    &topics::OpMoveEventsSince(since),
+                )
             }
-            Command::SendEvent(SendEventCommand::OpMove(art)) => {
-                self.publish_event(topics::OpMoveEvents.hash(), &art)
-            }
-            Command::SendEvent(SendEventCommand::OpSol(art)) => {
-                self.publish_event(topics::OpSolEvents.hash(), &art)
-            }
-            Command::SendEvent(SendEventCommand::LumioOpSol(ev)) => {
-                self.publish_event(topics::LumioSolEvents.hash(), &ev)
-            }
-            Command::SendEvent(SendEventCommand::LumioOpMove(ev)) => {
-                self.publish_event(topics::LumioMoveEvents.hash(), &ev)
+            SubscribeCommand::OpSolSince { sender, since } => {
+                self.op_sol_events_since
+                    .insert(topics::OpSolEventsSince(since).hash(), sender);
+                self.publish_event(
+                    topics::OpSolCommands.hash(),
+                    &topics::OpSolEventsSince(since),
+                )
             }
         }
     }
@@ -298,7 +284,7 @@ impl NodeRunner {
                             peer_id: *self.swarm.local_peer_id(),
                             claim: self.jwt.claim().expect("Encoding JWT never fails"),
                         })
-                        .expect("bincode ser never fails");
+                            .expect("bincode ser never fails");
 
                         let result =
                             self.swarm
