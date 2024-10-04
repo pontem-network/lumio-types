@@ -23,7 +23,7 @@ trait IsInterested<Msg> {
 
 impl<A, T: Topic + Default> IsInterested<T> for A {
     fn is_interested(&self, msg: &gossipsub::Message) -> bool {
-        msg.topic != T::default().hash()
+        msg.topic == T::default().hash()
     }
 }
 
@@ -190,7 +190,7 @@ impl HandleMsg<topics::OpMoveEventsSince> for NodeRunner {
 
 impl IsInterested<topics::OpSolEventsSince> for NodeRunner {
     fn is_interested(&self, msg: &gossipsub::Message) -> bool {
-        self.op_move_events_since_subs.contains_key(&msg.topic)
+        self.op_sol_events_since_subs.contains_key(&msg.topic)
     }
 }
 
@@ -306,7 +306,8 @@ impl NodeRunner {
         T: Topic,
         Self: HandleMsg<T> + IsInterested<T>,
     {
-        if IsInterested::<T>::is_interested(self, msg) {
+        tracing::trace!(s = std::any::type_name::<T>(), "Handling");
+        if !IsInterested::<T>::is_interested(self, msg) {
             return ControlFlow::Continue(());
         }
         let Ok(typed_msg) = bincode::deserialize::<T::Msg>(&msg.data) else {
@@ -321,6 +322,7 @@ impl NodeRunner {
 
     #[must_use]
     async fn handle_topics(&mut self, msg: &gossipsub::Message) -> ControlFlow<Result<()>> {
+        tracing::debug!("New message");
         self.try_run_msg::<topics::Auth>(msg).await?;
 
         let Some(source) = msg.source else {
@@ -344,7 +346,7 @@ impl NodeRunner {
 
         tracing::debug!(topic = ?msg.topic, "Ignoring message from unknown topic");
 
-        ControlFlow::Continue(())
+        ControlFlow::Break(Ok(()))
     }
 
     #[tracing::instrument(skip_all, fields(peer_id = %self.swarm.local_peer_id()))]

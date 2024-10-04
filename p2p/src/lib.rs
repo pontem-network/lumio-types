@@ -260,6 +260,7 @@ impl Node {
     }
 
     async fn send_event(&self, topic: impl Topic, event: impl serde::Serialize) -> Result<()> {
+        tracing::debug!(topic = %topic.topic(), "Sending event");
         self.cmd_sender
             .send(Command::SendEvent(
                 topic.topic(),
