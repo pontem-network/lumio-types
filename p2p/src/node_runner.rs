@@ -69,8 +69,22 @@ impl NodeRunner {
         }
     }
 
+    fn publish_event<E: serde::Serialize>(&mut self, hash: TopicHash, event: &E) {
+        match self.swarm.behaviour_mut().gossipsub.publish(
+            hash.clone(),
+            bincode::serialize(event).expect("bincode serialization never fails"),
+        ) {
+            Ok(_) => (),
+            Err(gossipsub::PublishError::InsufficientPeers) => {
+                // TODO: print topic name
+                tracing::warn!("Something might be wrong. Noone listens on topic hash {hash}")
+            }
+            Err(err) => panic!("Failed to publish message: {err}"),
+        }
+    }
+
     fn handle_command(&mut self, cmd: Command) {
-        let (topic, data) = match cmd {
+        match cmd {
             Command::Subscribe(cmd) => {
                 self.swarm
                     .behaviour_mut()
@@ -87,38 +101,33 @@ impl NodeRunner {
                     SubscribeCommand::OpMoveSince { sender, since } => {
                         self.op_move_events_since
                             .insert(topics::OpMoveEventsSince(since).hash(), sender);
+                        self.publish_event(
+                            topics::OpMoveCommands.hash(),
+                            &topics::OpMoveEventsSince(since),
+                        )
                     }
                     SubscribeCommand::OpSolSince { sender, since } => {
                         self.op_sol_events_since
                             .insert(topics::OpSolEventsSince(since).hash(), sender);
+                        self.publish_event(
+                            topics::OpSolCommands.hash(),
+                            &topics::OpSolEventsSince(since),
+                        )
                     }
                 }
-                return;
             }
             Command::SendEvent(SendEventCommand::OpMove(art)) => {
-                (topics::OpMoveEvents.hash(), bincode::serialize(&art))
+                self.publish_event(topics::OpMoveEvents.hash(), &art)
             }
             Command::SendEvent(SendEventCommand::OpSol(art)) => {
-                (topics::OpSolEvents.hash(), bincode::serialize(&art))
+                self.publish_event(topics::OpSolEvents.hash(), &art)
             }
             Command::SendEvent(SendEventCommand::LumioOpSol(ev)) => {
-                (topics::LumioSolEvents.hash(), bincode::serialize(&ev))
+                self.publish_event(topics::LumioSolEvents.hash(), &ev)
             }
             Command::SendEvent(SendEventCommand::LumioOpMove(ev)) => {
-                (topics::LumioMoveEvents.hash(), bincode::serialize(&ev))
+                self.publish_event(topics::LumioMoveEvents.hash(), &ev)
             }
-        };
-
-        match self.swarm.behaviour_mut().gossipsub.publish(
-            topic.clone(),
-            data.expect("bincode serialization never fails"),
-        ) {
-            Ok(_) => (),
-            Err(gossipsub::PublishError::InsufficientPeers) => {
-                // TODO: print topic name
-                tracing::warn!("Something might be wrong. Noone listens on topic hash {topic}")
-            }
-            Err(err) => panic!("Failed to publish message: {err}"),
         }
     }
 
