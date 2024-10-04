@@ -69,11 +69,13 @@ impl NodeRunner {
         (me, cmd_sender)
     }
 
-    fn publish_event<E: serde::Serialize>(&mut self, hash: TopicHash, event: &E) {
-        match self.swarm.behaviour_mut().gossipsub.publish(
-            hash.clone(),
-            bincode::serialize(event).expect("bincode serialization never fails"),
-        ) {
+    fn publish(&mut self, hash: TopicHash, event: Vec<u8>) {
+        match self
+            .swarm
+            .behaviour_mut()
+            .gossipsub
+            .publish(hash.clone(), event)
+        {
             Ok(_) => (),
             Err(gossipsub::PublishError::InsufficientPeers) => {
                 // TODO: print topic name
@@ -83,11 +85,18 @@ impl NodeRunner {
         }
     }
 
+    fn publish_event<E: serde::Serialize>(&mut self, hash: TopicHash, event: &E) {
+        self.publish(
+            hash,
+            bincode::serialize(event).expect("bincode serialization never fails"),
+        )
+    }
+
     fn handle_command(&mut self, cmd: Command) {
         let cmd = match cmd {
             Command::Subscribe(cmd) => cmd,
             Command::SendEvent(topic, ev) => {
-                self.publish_event(topic.hash(), &ev);
+                self.publish(topic.hash(), ev);
                 return;
             }
         };
