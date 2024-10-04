@@ -10,6 +10,7 @@ use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
 use lumio_types::Slot;
 
 use std::collections::{HashMap, HashSet};
+use std::ops::ControlFlow;
 
 use crate::topics::Topic;
 use crate::{
@@ -17,6 +18,26 @@ use crate::{
 };
 
 trait HandleMsg<T: Topic> {
+    fn try_run_msg(
+        &mut self,
+        topic: T,
+        msg: &gossipsub::Message,
+    ) -> impl Future<Output = ControlFlow<Result<()>>> {
+        async move {
+            if msg.topic != Topic::hash(&topic) {
+                return ControlFlow::Continue(());
+            }
+            let Ok(msg) = bincode::deserialize(&msg.data) else {
+                return ControlFlow::Break(Err(eyre::eyre!(
+                    "Failed to decode event for topic {}. Skipping...",
+                    std::any::type_name::<T>()
+                )));
+            };
+
+            ControlFlow::Break(self.handle_msg(msg).await)
+        }
+    }
+
     fn handle_msg(&mut self, msg: T::Msg) -> impl Future<Output = Result<()>>;
 }
 
@@ -82,14 +103,6 @@ impl_handle_channel! {
 }
 
 impl NodeRunner {
-    async fn handle_msg<T>(&mut self, msg: T::Msg) -> Result<()>
-    where
-        T: Topic,
-        Self: HandleMsg<T>,
-    {
-        HandleMsg::<T>::handle_msg(self, msg).await
-    }
-
     pub(crate) fn new(
         swarm: Swarm<LumioBehaviour>,
         jwt: JwtSecret,
@@ -180,62 +193,42 @@ impl NodeRunner {
         }
     }
 
-    async fn handle_message(&mut self, msg: libp2p::gossipsub::Message) {
-        let gossipsub::Message {
-            data,
-            topic,
-            source,
-            ..
-        } = &msg;
-        let Some(source) = source else {
-            tracing::debug!(?topic, "Ignoring message as sender is unknown");
-            return;
+    #[must_use]
+    async fn handle_topics(&mut self, msg: &gossipsub::Message) -> ControlFlow<Result<()>> {
+        self.try_run_msg(topics::Auth, msg).await?;
+
+        let Some(source) = msg.source else {
+            tracing::debug!(topic = ?msg.topic, "Ignoring message as sender is unknown");
+            return ControlFlow::Break(Ok(()));
         };
 
-        match (topic.clone(), self.authorized.contains(&source)) {
-            (t, _) if t == topics::Auth.hash() => {
-                let Ok(auth) = bincode::deserialize(&data) else {
-                    tracing::debug!("Failed to decode op move event. Skipping...");
-                    return;
-                };
-                let Err(err) = self.handle_msg::<topics::Auth>(auth).await else {
-                    return;
-                };
-                tracing::debug!("Failed to auth peer {source}: {err:?}");
-            }
-            (t, true) if t == topics::OpMoveEvents.hash() => {
-                let Ok(msg) = bincode::deserialize(&data) else {
-                    tracing::debug!("Failed to decode op move event. Skipping...");
-                    return;
-                };
+        if !self.authorized.contains(&source) {
+            tracing::trace!(?source, "Ignoring message from unauthorized peer");
+            return ControlFlow::Break(Ok(()));
+        }
 
-                let _ = self.handle_msg::<topics::OpMoveEvents>(msg).await;
-            }
-            (t, true) if t == topics::OpSolEvents.hash() => {
-                let Ok(msg) = bincode::deserialize(&data) else {
-                    tracing::debug!("Failed to decode op sol event. Skipping...");
-                    return;
-                };
+        self.try_run_msg(topics::OpMoveEvents, msg).await?;
+        self.try_run_msg(topics::OpSolEvents, msg).await?;
+        self.try_run_msg(topics::LumioMoveEvents, msg).await?;
+        self.try_run_msg(topics::LumioSolEvents, msg).await?;
 
-                let _ = self.handle_msg::<topics::OpSolEvents>(msg).await;
-            }
-            (t, true) if t == topics::LumioSolEvents.hash() => {
-                let Ok(msg) = bincode::deserialize(&data) else {
-                    tracing::debug!("Failed to decode lumio sol event. Skipping...");
-                    return;
-                };
+        ControlFlow::Continue(())
+    }
 
-                let _ = self.handle_msg::<topics::LumioSolEvents>(msg).await;
+    async fn handle_message(&mut self, msg: gossipsub::Message) {
+        match self.handle_topics(&msg).await {
+            ControlFlow::Break(Ok(())) => return,
+            ControlFlow::Break(Err(err)) => {
+                tracing::warn!(?err);
+                return;
             }
-            (t, true) if t == topics::LumioMoveEvents.hash() => {
-                let Ok(msg) = bincode::deserialize(&data) else {
-                    tracing::debug!("Failed to decode lumio move event. Skipping...");
-                    return;
-                };
+            ControlFlow::Continue(()) => (),
+        }
 
-                let _ = self.handle_msg::<topics::LumioMoveEvents>(msg).await;
-            }
-            (t, true) if t == topics::OpMoveCommands.hash() => {
+        let gossipsub::Message { data, topic, .. } = msg;
+
+        match topic {
+            t if t == topics::OpMoveCommands.hash() => {
                 let ch = self
                     .op_move_events_since_handler
                     .as_ref()
@@ -263,7 +256,7 @@ impl NodeRunner {
                     }
                 });
             }
-            (t, true) if t == topics::OpSolCommands.hash() => {
+            t if t == topics::OpSolCommands.hash() => {
                 let ch = self
                     .op_sol_events_since_handler
                     .as_ref()
@@ -291,7 +284,7 @@ impl NodeRunner {
                     }
                 });
             }
-            (t, true) if self.op_move_events_since_subs.contains_key(&t) => {
+            t if self.op_move_events_since_subs.contains_key(&t) => {
                 let Ok(msg) = bincode::deserialize(&data) else {
                     tracing::debug!("Failed to decode op move events. Skipping...");
                     return;
@@ -299,7 +292,7 @@ impl NodeRunner {
                 let sender = self.op_move_events_since_subs.get(&t).unwrap();
                 let _ = sender.send(msg).await;
             }
-            (t, true) if self.op_sol_events_since_subs.contains_key(&t) => {
+            t if self.op_sol_events_since_subs.contains_key(&t) => {
                 let Ok(msg) = bincode::deserialize(&data) else {
                     tracing::debug!("Failed to decode op sol events. Skipping...");
                     return;
@@ -307,8 +300,7 @@ impl NodeRunner {
                 let sender = self.op_sol_events_since_subs.get(&t).unwrap();
                 let _ = sender.send(msg).await;
             }
-            (topic, true) => tracing::debug!(?topic, "Ignoring message from unknown topic"),
-            (_, false) => tracing::trace!(?source, "Ignoring message from unauthorized"),
+            topic => tracing::debug!(?topic, "Ignoring message from unknown topic"),
         }
     }
 
