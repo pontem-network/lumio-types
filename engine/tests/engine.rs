@@ -12,20 +12,12 @@ pub struct FakeLedger {
 }
 
 impl Ledger for FakeLedger {
-    fn get_current_slot(&self) -> Result<lumio_types::Slot> {
-        Ok(self.current_slot.load(Ordering::SeqCst))
-    }
-
     fn get_committed_l1_slot(&self) -> Result<lumio_types::Slot> {
         Ok(self.committed_l1_slot.load(Ordering::SeqCst))
     }
 
     fn genesis_hash(&self) -> Result<lumio_types::Hash> {
         Ok(Hash::default())
-    }
-
-    fn get_version(&self) -> Result<u64> {
-        Ok(self.current_slot.load(Ordering::SeqCst))
     }
 
     fn get_slot(
