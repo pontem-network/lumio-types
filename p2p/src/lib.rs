@@ -51,8 +51,18 @@ enum SubscribeCommand {
     },
     /// Events from lumio to op-sol
     LumioOpSol(tokio::sync::mpsc::Sender<SlotAttribute>),
+    /// Events from lumio to op-sol
+    LumioOpSolSince {
+        since: Slot,
+        sender: tokio::sync::mpsc::Sender<SlotAttribute>,
+    },
     /// Events from lumio to op-move
     LumioOpMove(tokio::sync::mpsc::Sender<SlotAttribute>),
+    /// Events from lumio to op-move
+    LumioOpMoveSince {
+        since: Slot,
+        sender: tokio::sync::mpsc::Sender<SlotAttribute>,
+    },
     /// Give away streams from `OpMoveSince` subscription
     OpMoveSinceHandler(
         tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>,
@@ -60,6 +70,14 @@ enum SubscribeCommand {
     /// Give away streams from `OpSolSince` subscription
     OpSolSinceHandler(
         tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>,
+    ),
+    /// Give away streams from `LumioOpSolSince` subscription
+    LumioOpSolSinceHandler(
+        tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotAttribute>)>,
+    ),
+    /// Give away streams from `LumioOpMoveSince` subscription
+    LumioOpMoveSinceHandler(
+        tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotAttribute>)>,
     ),
 }
 
@@ -70,10 +88,15 @@ impl SubscribeCommand {
             Self::OpMoveSince { since, .. } => topics::OpMoveEventsSince(*since).topic(),
             Self::OpSol(_) => topics::OpSolEvents.topic(),
             Self::OpSolSince { since, .. } => topics::OpSolEventsSince(*since).topic(),
+            Self::LumioOpSolSince { since, .. } => topics::LumioSolEventsSince(*since).topic(),
+            Self::LumioOpMoveSince { since, .. } => topics::LumioMoveEventsSince(*since).topic(),
             Self::LumioOpSol(_) => topics::LumioSolEvents.topic(),
             Self::LumioOpMove(_) => topics::LumioMoveEvents.topic(),
             Self::OpMoveSinceHandler(_) => topics::OpMoveCommands.topic(),
             Self::OpSolSinceHandler(_) => topics::OpSolCommands.topic(),
+            Self::LumioOpSolSinceHandler(_) | Self::LumioOpMoveSinceHandler(_) => {
+                topics::LumioCommands.topic()
+            }
         }
     }
 }
@@ -194,6 +217,30 @@ impl Node {
             .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
     }
 
+    pub async fn handle_lumio_move_since(
+        &self,
+    ) -> Result<
+        impl Stream<Item = (Slot, impl Sink<SlotAttribute> + Unpin + 'static)> + Unpin + 'static,
+    > {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::LumioOpMoveSinceHandler(sender))
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver)
+            .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
+    }
+
+    pub async fn handle_lumio_sol_since(
+        &self,
+    ) -> Result<
+        impl Stream<Item = (Slot, impl Sink<SlotAttribute> + Unpin + 'static)> + Unpin + 'static,
+    > {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::LumioOpSolSinceHandler(sender))
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver)
+            .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
+    }
+
     pub async fn subscribe_op_move_events(
         &self,
     ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
@@ -232,11 +279,31 @@ impl Node {
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
+    pub async fn subscribe_lumio_events_since(
+        &self,
+        since: Slot,
+    ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::OpMoveSince { since, sender })
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
+    }
+
     pub async fn subscribe_lumio_op_sol_events(
         &self,
     ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(20);
         self.subscribe_event(SubscribeCommand::LumioOpSol(sender))
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
+    }
+
+    pub async fn subscribe_lumio_op_sol_events_since(
+        &self,
+        since: Slot,
+    ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::LumioOpSolSince { since, sender })
             .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
@@ -252,9 +319,10 @@ impl Node {
 
     pub async fn subscribe_lumio_op_move_events_since(
         &self,
+        since: Slot,
     ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
-        let (sender, receiver) = tokio::sync::mpsc::channel(20);
-        self.subscribe_event(SubscribeCommand::LumioOpMove(sender))
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::LumioOpMoveSince { since, sender })
             .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
@@ -292,6 +360,12 @@ impl Node {
 pub(crate) struct Auth {
     peer_id: libp2p::PeerId,
     claim: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) enum LumioCommand {
+    SolSubscribeSince(topics::LumioSolEventsSince),
+    MoveSubscribeSince(topics::LumioMoveEventsSince),
 }
 
 pub(crate) mod topics {
@@ -335,6 +409,7 @@ pub(crate) mod topics {
         struct LumioSolEvents<SlotAttribute>("lumio_sol_events");
         struct LumioMoveEvents<SlotAttribute>("lumio_move_events");
 
+        struct LumioCommands<crate::LumioCommand>("lumio_cmds");
         struct OpSolCommands<OpSolEventsSince>("op_sol_cmds");
         struct OpMoveCommands<OpMoveEventsSince>("op_move_cmds");
     }
@@ -359,6 +434,32 @@ pub(crate) mod topics {
         type Msg = SlotPayloadWithEvents;
         fn topic(&self) -> IdentTopic {
             IdentTopic::new(format!("/lumio/v1/op_move_events/since/{}", self.0))
+        }
+        fn hash(&self) -> TopicHash {
+            self.topic().hash()
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct LumioSolEventsSince(pub lumio_types::Slot);
+
+    impl Topic for LumioSolEventsSince {
+        type Msg = SlotAttribute;
+        fn topic(&self) -> IdentTopic {
+            IdentTopic::new(format!("/lumio/v1/lumio_sol_events/since/{}", self.0))
+        }
+        fn hash(&self) -> TopicHash {
+            self.topic().hash()
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct LumioMoveEventsSince(pub lumio_types::Slot);
+
+    impl Topic for LumioMoveEventsSince {
+        type Msg = SlotAttribute;
+        fn topic(&self) -> IdentTopic {
+            IdentTopic::new(format!("/lumio/v1/lumio_move_events/since/{}", self.0))
         }
         fn hash(&self) -> TopicHash {
             self.topic().hash()

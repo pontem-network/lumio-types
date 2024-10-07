@@ -15,9 +15,9 @@ pub struct SlotPayloadWithEvents {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SlotAttribute {
-    slot_id: Slot,
-    events: Vec<L1Event>,
-    sync_status: Option<(Slot, PayloadStatus)>,
+    pub slot_id: Slot,
+    pub events: Vec<L1Event>,
+    pub sync_status: Option<(Slot, PayloadStatus)>,
 }
 
 impl SlotAttribute {

@@ -98,3 +98,28 @@ async fn sub_since() {
 
     assert_eq!(op_sol_events.next().await.unwrap().payload.slot, 14);
 }
+
+#[tokio::test]
+async fn sub_lumio_since() {
+    super::init();
+
+    let (node1, node2) = two_nodes().await;
+    let mut lumio_sol_subs = node1.handle_lumio_sol_since().await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    let mut lumio_sol_events = node2.subscribe_lumio_op_sol_events_since(10).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    let (slot, mut sink) = lumio_sol_subs.next().await.unwrap();
+    assert_eq!(slot, 10);
+    let payload = SlotAttribute {
+        slot_id: 14,
+        events: vec![],
+        sync_status: None,
+    };
+    let Ok(_) = sink.send(payload).await else {
+        panic!()
+    };
+
+    assert_eq!(lumio_sol_events.next().await.unwrap().slot_id, 14);
+}
