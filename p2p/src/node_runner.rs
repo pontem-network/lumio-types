@@ -8,12 +8,32 @@ use libp2p::{
 };
 use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
 use lumio_types::Slot;
-use serde::{Deserialize, Serialize};
 
 use std::collections::{HashMap, HashSet};
+use std::ops::ControlFlow;
 
 use crate::topics::Topic;
-use crate::{topics, Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, SubscribeCommand};
+use crate::{
+    topics, Auth, Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, SubscribeCommand,
+};
+
+trait IsInterested<Msg> {
+    fn is_interested(&self, msg: &gossipsub::Message) -> bool;
+}
+
+impl<A, T: Topic + Default> IsInterested<T> for A {
+    fn is_interested(&self, msg: &gossipsub::Message) -> bool {
+        msg.topic == T::default().hash()
+    }
+}
+
+trait HandleMsg<T: Topic> {
+    fn handle_msg(
+        &mut self,
+        msg: T::Msg,
+        extra: &gossipsub::Message,
+    ) -> impl Future<Output = Result<()>>;
+}
 
 pub struct NodeRunner {
     swarm: Swarm<LumioBehaviour>,
@@ -38,10 +58,156 @@ pub struct NodeRunner {
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-struct Auth {
-    peer_id: PeerId,
-    claim: String,
+impl HandleMsg<topics::Auth> for NodeRunner {
+    async fn handle_msg(
+        &mut self,
+        Auth { peer_id, claim }: Auth,
+        _: &gossipsub::Message,
+    ) -> Result<()> {
+        self.jwt
+            .decode(claim)
+            .context("Failed to decode JWT claim")?;
+        self.authorized.insert(peer_id);
+        Ok(())
+    }
+}
+
+macro_rules! impl_handle_channel {
+    ($node_runner:ty {
+        $($topic:ty => $field:ident),* $(,)?
+    }) => {$(
+        impl HandleMsg<$topic> for $node_runner {
+            async fn handle_msg(
+                &mut self,
+                msg: <$topic as topics::Topic>::Msg,
+                _: &gossipsub::Message,
+            ) -> Result<()> {
+                // TODO: unsub if noone listens
+                let _ = self
+                    . $field
+                    .as_ref()
+                    .expect("We should always have a channel if we subscribed to topic")
+                    .send(msg)
+                    .await;
+                Ok(())
+            }
+        }
+    )*}
+}
+
+impl_handle_channel! {
+    NodeRunner {
+        topics::OpMoveEvents => op_move_events,
+        topics::OpSolEvents => op_sol_events,
+        topics::LumioSolEvents => lumio_sol_events,
+        topics::LumioMoveEvents => lumio_move_events,
+    }
+}
+
+impl HandleMsg<topics::OpMoveCommands> for NodeRunner {
+    async fn handle_msg(
+        &mut self,
+        topic: topics::OpMoveEventsSince,
+        _: &gossipsub::Message,
+    ) -> Result<()> {
+        let ch = self
+            .op_move_events_since_handler
+            .as_ref()
+            .expect("We should always have a channel if we subscribed to topic");
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
+        let _ = ch.send((topic.0, sender)).await;
+        tokio::spawn({
+            let cmd_sender = self.cmd_sender.clone();
+            async move {
+                while let Some(msg) = receiver.recv().await {
+                    let msg = bincode::serialize(&msg).unwrap();
+                    if cmd_sender
+                        .send(Command::SendEvent(topic.topic(), msg))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            }
+        });
+        Ok(())
+    }
+}
+
+impl HandleMsg<topics::OpSolCommands> for NodeRunner {
+    async fn handle_msg(
+        &mut self,
+        topic: topics::OpSolEventsSince,
+        _: &gossipsub::Message,
+    ) -> Result<()> {
+        let ch = self
+            .op_sol_events_since_handler
+            .as_ref()
+            .expect("We should always have a channel if we subscribed to topic");
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
+        let _ = ch.send((topic.0, sender)).await;
+        tokio::spawn({
+            let cmd_sender = self.cmd_sender.clone();
+            async move {
+                while let Some(msg) = receiver.recv().await {
+                    let msg = bincode::serialize(&msg).unwrap();
+                    if cmd_sender
+                        .send(Command::SendEvent(topic.topic(), msg))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            }
+        });
+        Ok(())
+    }
+}
+
+impl IsInterested<topics::OpMoveEventsSince> for NodeRunner {
+    fn is_interested(&self, msg: &gossipsub::Message) -> bool {
+        self.op_move_events_since_subs.contains_key(&msg.topic)
+    }
+}
+
+impl HandleMsg<topics::OpMoveEventsSince> for NodeRunner {
+    async fn handle_msg(
+        &mut self,
+        msg: SlotPayloadWithEvents,
+        gossipsub::Message { topic, .. }: &gossipsub::Message,
+    ) -> Result<()> {
+        let _ = self
+            .op_move_events_since_subs
+            .get(topic)
+            .unwrap()
+            .send(msg)
+            .await;
+        Ok(())
+    }
+}
+
+impl IsInterested<topics::OpSolEventsSince> for NodeRunner {
+    fn is_interested(&self, msg: &gossipsub::Message) -> bool {
+        self.op_sol_events_since_subs.contains_key(&msg.topic)
+    }
+}
+
+impl HandleMsg<topics::OpSolEventsSince> for NodeRunner {
+    async fn handle_msg(
+        &mut self,
+        msg: SlotPayloadWithEvents,
+        gossipsub::Message { topic, .. }: &gossipsub::Message,
+    ) -> Result<()> {
+        let _ = self
+            .op_sol_events_since_subs
+            .get(topic)
+            .unwrap()
+            .send(msg)
+            .await;
+        Ok(())
+    }
 }
 
 impl NodeRunner {
@@ -135,153 +301,52 @@ impl NodeRunner {
         }
     }
 
-    async fn handle_message(&mut self, msg: libp2p::gossipsub::Message) {
-        let libp2p::gossipsub::Message {
-            data,
-            topic,
-            source,
-            ..
-        } = msg;
-        let Some(source) = source else {
-            tracing::debug!(?topic, "Ignoring message as sender is unknown");
-            return;
+    async fn try_run_msg<T>(&mut self, msg: &gossipsub::Message) -> ControlFlow<Result<()>>
+    where
+        T: Topic,
+        Self: HandleMsg<T> + IsInterested<T>,
+    {
+        tracing::trace!(s = std::any::type_name::<T>(), "Handling");
+        if !IsInterested::<T>::is_interested(self, msg) {
+            return ControlFlow::Continue(());
+        }
+        let Ok(typed_msg) = bincode::deserialize::<T::Msg>(&msg.data) else {
+            return ControlFlow::Break(Err(eyre::eyre!(
+                "Failed to decode event for topic {}. Skipping...",
+                std::any::type_name::<T>()
+            )));
         };
 
-        match (topic, self.authorized.contains(&source)) {
-            (t, _) if t == topics::Auth.hash() => {
-                let Ok(Auth { peer_id, claim }) = bincode::deserialize(&data) else {
-                    tracing::debug!("Failed to decode op move event. Skipping...");
-                    return;
-                };
+        ControlFlow::Break(HandleMsg::<T>::handle_msg(self, typed_msg, msg).await)
+    }
 
-                let Err(err) = self.authorize(peer_id, claim) else {
-                    return;
-                };
-                tracing::debug!("Failed to auth peer {source}: {err:?}");
-            }
-            (t, true) if t == topics::OpMoveEvents.hash() => {
-                let ch = self
-                    .op_move_events
-                    .as_mut()
-                    .expect("We should always have a channel if we subscribed to topic");
-                let Ok(msg) = bincode::deserialize(&data) else {
-                    tracing::debug!("Failed to decode op move event. Skipping...");
-                    return;
-                };
+    #[must_use]
+    async fn handle_topics(&mut self, msg: &gossipsub::Message) -> ControlFlow<Result<()>> {
+        tracing::debug!("New message");
+        self.try_run_msg::<topics::Auth>(msg).await?;
 
-                let _ = ch.send(msg).await;
-            }
-            (t, true) if t == topics::OpSolEvents.hash() => {
-                let ch = self
-                    .op_sol_events
-                    .as_mut()
-                    .expect("We should always have a channel if we subscribed to topic");
-                let Ok(msg) = bincode::deserialize(&data) else {
-                    tracing::debug!("Failed to decode op sol event. Skipping...");
-                    return;
-                };
+        let Some(source) = msg.source else {
+            tracing::debug!(topic = ?msg.topic, "Ignoring message as sender is unknown");
+            return ControlFlow::Break(Ok(()));
+        };
 
-                let _ = ch.send(msg).await;
-            }
-            (t, true) if t == topics::LumioSolEvents.hash() => {
-                let ch = self
-                    .lumio_sol_events
-                    .as_mut()
-                    .expect("We should always have a channel if we subscribed to topic");
-                let Ok(msg) = bincode::deserialize(&data) else {
-                    tracing::debug!("Failed to decode lumio sol event. Skipping...");
-                    return;
-                };
-
-                let _ = ch.send(msg).await;
-            }
-            (t, true) if t == topics::LumioMoveEvents.hash() => {
-                let ch = self
-                    .lumio_move_events
-                    .as_mut()
-                    .expect("We should always have a channel if we subscribed to topic");
-                let Ok(msg) = bincode::deserialize(&data) else {
-                    tracing::debug!("Failed to decode lumio move event. Skipping...");
-                    return;
-                };
-
-                let _ = ch.send(msg).await;
-            }
-            (t, true) if t == topics::OpMoveCommands.hash() => {
-                let ch = self
-                    .op_move_events_since_handler
-                    .as_ref()
-                    .expect("We should always have a channel if we subscribed to topic");
-                let Ok(topic) = bincode::deserialize::<topics::OpMoveEventsSince>(&data) else {
-                    tracing::debug!("Failed to decode op move commands. Skipping...");
-                    return;
-                };
-
-                let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
-                let _ = ch.send((topic.0, sender)).await;
-                tokio::spawn({
-                    let cmd_sender = self.cmd_sender.clone();
-                    async move {
-                        while let Some(msg) = receiver.recv().await {
-                            let msg = bincode::serialize(&msg).unwrap();
-                            if cmd_sender
-                                .send(Command::SendEvent(topic.topic(), msg))
-                                .await
-                                .is_err()
-                            {
-                                break;
-                            }
-                        }
-                    }
-                });
-            }
-            (t, true) if t == topics::OpSolCommands.hash() => {
-                let ch = self
-                    .op_sol_events_since_handler
-                    .as_ref()
-                    .expect("We should always have a channel if we subscribed to topic");
-                let Ok(topic) = bincode::deserialize::<topics::OpSolEventsSince>(&data) else {
-                    tracing::debug!("Failed to decode op sol commands. Skipping...");
-                    return;
-                };
-
-                let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
-                let _ = ch.send((topic.0, sender)).await;
-                tokio::spawn({
-                    let cmd_sender = self.cmd_sender.clone();
-                    async move {
-                        while let Some(msg) = receiver.recv().await {
-                            let msg = bincode::serialize(&msg).unwrap();
-                            if cmd_sender
-                                .send(Command::SendEvent(topic.topic(), msg))
-                                .await
-                                .is_err()
-                            {
-                                break;
-                            }
-                        }
-                    }
-                });
-            }
-            (t, true) if self.op_move_events_since_subs.contains_key(&t) => {
-                let Ok(msg) = bincode::deserialize(&data) else {
-                    tracing::debug!("Failed to decode op move events. Skipping...");
-                    return;
-                };
-                let sender = self.op_move_events_since_subs.get(&t).unwrap();
-                let _ = sender.send(msg).await;
-            }
-            (t, true) if self.op_sol_events_since_subs.contains_key(&t) => {
-                let Ok(msg) = bincode::deserialize(&data) else {
-                    tracing::debug!("Failed to decode op sol events. Skipping...");
-                    return;
-                };
-                let sender = self.op_sol_events_since_subs.get(&t).unwrap();
-                let _ = sender.send(msg).await;
-            }
-            (topic, true) => tracing::debug!(?topic, "Ignoring message from unknown topic"),
-            (_, false) => tracing::trace!(?source, "Ignoring message from unauthorized"),
+        if !self.authorized.contains(&source) {
+            tracing::trace!(?source, "Ignoring message from unauthorized peer");
+            return ControlFlow::Break(Ok(()));
         }
+
+        self.try_run_msg::<topics::OpMoveEvents>(msg).await?;
+        self.try_run_msg::<topics::OpSolEvents>(msg).await?;
+        self.try_run_msg::<topics::LumioMoveEvents>(msg).await?;
+        self.try_run_msg::<topics::LumioSolEvents>(msg).await?;
+        self.try_run_msg::<topics::OpMoveCommands>(msg).await?;
+        self.try_run_msg::<topics::OpSolCommands>(msg).await?;
+        self.try_run_msg::<topics::OpMoveEventsSince>(msg).await?;
+        self.try_run_msg::<topics::OpSolEventsSince>(msg).await?;
+
+        tracing::debug!(topic = ?msg.topic, "Ignoring message from unknown topic");
+
+        ControlFlow::Break(Ok(()))
     }
 
     #[tracing::instrument(skip_all, fields(peer_id = %self.swarm.local_peer_id()))]
@@ -330,19 +395,15 @@ impl NodeRunner {
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Gossipsub(gossipsub::Event::Message {
                         message,
                         ..
-                    })) => self.handle_message(message).await,
+                    })) => match self.handle_topics(&message).await {
+                        ControlFlow::Break(Ok(())) => (),
+                        ControlFlow::Break(Err(err)) => tracing::warn!(?err),
+                        ControlFlow::Continue(()) => unreachable!("At this point we will always break"),
+                    }
                     SwarmEvent::NewListenAddr { address, .. } => tracing::debug!("Local node is listening on {address}"),
                     event => tracing::trace!(?event),
                 }
             }
         }
-    }
-
-    pub fn authorize(&mut self, source: PeerId, claim: String) -> Result<()> {
-        self.jwt
-            .decode(claim)
-            .context("Failed to decode JWT claim")?;
-        self.authorized.insert(source);
-        Ok(())
     }
 }
