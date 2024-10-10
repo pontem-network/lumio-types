@@ -52,7 +52,6 @@ async fn simple() {
         .send_lumio_op_sol(SlotAttribute::new(
             1,
             vec![],
-            None,
             Some((0, PayloadStatus::Pending)),
         ))
         .await
@@ -63,7 +62,6 @@ async fn simple() {
         Some(SlotAttribute::new(
             1,
             vec![],
-            None,
             Some((0, PayloadStatus::Pending)),
         ))
     );
@@ -117,7 +115,6 @@ async fn sub_lumio_since() {
     let payload = SlotAttribute {
         slot_id: 14,
         events: vec![],
-        engines_events: None,
         sync_status: None,
     };
     let Ok(_) = sink.send(payload).await else {

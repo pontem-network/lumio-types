@@ -9,8 +9,6 @@ use super::Bridge;
 pub enum L2Event {
     Withdrawal(Bridge),
     Spl(SplL2Event),
-    ToSol(EngineAction),
-    ToMove(EngineAction),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, IntoStaticStr)]
@@ -24,6 +22,7 @@ pub enum SplL2Event {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct EngineActions {
+    pub last_slot: Slot,
     pub slot: Slot,
     pub actions: Vec<EngineAction>,
 }

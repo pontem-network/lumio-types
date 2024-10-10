@@ -1,4 +1,3 @@
-use crate::events::l2::EngineActions;
 use crate::events::{l1::L1Event, l2::L2Event};
 use crate::{Hash, Slot, Transaction, UnixTimestamp};
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -18,7 +17,6 @@ pub struct SlotPayloadWithEvents {
 pub struct SlotAttribute {
     pub slot_id: Slot,
     pub events: Vec<L1Event>,
-    pub engines_events: Option<EngineActions>,
     pub sync_status: Option<(Slot, PayloadStatus)>,
 }
 
@@ -26,13 +24,11 @@ impl SlotAttribute {
     pub fn new(
         slot_id: Slot,
         events: Vec<L1Event>,
-        engines_events: Option<EngineActions>,
         sync_status: Option<(Slot, PayloadStatus)>,
     ) -> Self {
         Self {
             slot_id,
             events,
-            engines_events,
             sync_status,
         }
     }
