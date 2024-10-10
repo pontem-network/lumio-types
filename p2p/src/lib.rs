@@ -417,14 +417,14 @@ pub(crate) mod topics {
 
     topic! {
         struct Auth<crate::Auth>("auth");
-        struct MoveEvents<SlotPayloadWithEvents>("op_move_events");
-        struct SolEvents<SlotPayloadWithEvents>("op_sol_events");
-        struct LumioSolEvents<SlotAttribute>("lumio_sol_events");
-        struct LumioMoveEvents<SlotAttribute>("lumio_move_events");
+        struct MoveEvents<SlotPayloadWithEvents>("move/events");
+        struct SolEvents<SlotPayloadWithEvents>("sol/events");
+        struct LumioSolEvents<SlotAttribute>("lumio/sol/events");
+        struct LumioMoveEvents<SlotAttribute>("lumio/move/events");
 
-        struct LumioCommands<crate::LumioCommand>("lumio_cmds");
-        struct SolCommands<crate::SolCommand>("op_sol_cmds");
-        struct MoveCommands<crate::MoveCommand>("op_move_cmds");
+        struct LumioCommands<crate::LumioCommand>("lumio/cmds");
+        struct SolCommands<crate::SolCommand>("sol/cmds");
+        struct MoveCommands<crate::MoveCommand>("move/cmds");
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -433,7 +433,7 @@ pub(crate) mod topics {
     impl Topic for SolEventsSince {
         type Msg = SlotPayloadWithEvents;
         fn topic(&self) -> IdentTopic {
-            IdentTopic::new(format!("/lumio/v1/op_sol_events/since/{}", self.0))
+            IdentTopic::new(format!("/lumio/v1/sol/events/since/{}", self.0))
         }
     }
 
@@ -443,7 +443,7 @@ pub(crate) mod topics {
     impl Topic for MoveEventsSince {
         type Msg = SlotPayloadWithEvents;
         fn topic(&self) -> IdentTopic {
-            IdentTopic::new(format!("/lumio/v1/op_move_events/since/{}", self.0))
+            IdentTopic::new(format!("/lumio/v1/move/events/since/{}", self.0))
         }
     }
 
@@ -453,7 +453,7 @@ pub(crate) mod topics {
     impl Topic for LumioSolEventsSince {
         type Msg = SlotAttribute;
         fn topic(&self) -> IdentTopic {
-            IdentTopic::new(format!("/lumio/v1/lumio_sol_events/since/{}", self.0))
+            IdentTopic::new(format!("/lumio/v1/sol/events/since/{}", self.0))
         }
     }
 
@@ -463,7 +463,7 @@ pub(crate) mod topics {
     impl Topic for LumioMoveEventsSince {
         type Msg = SlotAttribute;
         fn topic(&self) -> IdentTopic {
-            IdentTopic::new(format!("/lumio/v1/lumio_move_events/since/{}", self.0))
+            IdentTopic::new(format!("/lumio/v1/lumio/move/events/since/{}", self.0))
         }
     }
 
@@ -473,7 +473,7 @@ pub(crate) mod topics {
     impl Topic for MoveEngineSince {
         type Msg = EngineActions;
         fn topic(&self) -> IdentTopic {
-            IdentTopic::new(format!("/lumio/v1/op_move_engine/since/{}", self.0))
+            IdentTopic::new(format!("/lumio/v1/move/engine/since/{}", self.0))
         }
     }
 
@@ -483,7 +483,7 @@ pub(crate) mod topics {
     impl Topic for SolEngineSince {
         type Msg = EngineActions;
         fn topic(&self) -> IdentTopic {
-            IdentTopic::new(format!("/lumio/v1/op_sol_engine/since/{}", self.0))
+            IdentTopic::new(format!("/lumio/v1/sol/engine/since/{}", self.0))
         }
     }
 }
