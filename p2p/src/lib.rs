@@ -368,8 +368,21 @@ pub(crate) enum LumioCommand {
     MoveSubscribeSince(topics::LumioMoveEventsSince),
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) enum OpSolCommand {
+    SubEventsSince(topics::OpSolEventsSince),
+    EngineSince(topics::OpSolEngineSince),
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) enum OpMoveCommand {
+    SubEventsSince(topics::OpMoveEventsSince),
+    EngineSince(topics::OpMoveEngineSince),
+}
+
 pub(crate) mod topics {
     use libp2p::gossipsub::{IdentTopic, TopicHash};
+    use lumio_types::events::l2::EngineActions;
     use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
     use serde::{Deserialize, Serialize};
 
@@ -380,7 +393,9 @@ pub(crate) mod topics {
 
         fn topic(&self) -> IdentTopic;
 
-        fn hash(&self) -> TopicHash;
+        fn hash(&self) -> TopicHash {
+            self.topic().hash()
+        }
     }
 
     macro_rules! topic {
@@ -410,8 +425,8 @@ pub(crate) mod topics {
         struct LumioMoveEvents<SlotAttribute>("lumio_move_events");
 
         struct LumioCommands<crate::LumioCommand>("lumio_cmds");
-        struct OpSolCommands<OpSolEventsSince>("op_sol_cmds");
-        struct OpMoveCommands<OpMoveEventsSince>("op_move_cmds");
+        struct OpSolCommands<crate::OpSolCommand>("op_sol_cmds");
+        struct OpMoveCommands<crate::OpMoveCommand>("op_move_cmds");
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -421,9 +436,6 @@ pub(crate) mod topics {
         type Msg = SlotPayloadWithEvents;
         fn topic(&self) -> IdentTopic {
             IdentTopic::new(format!("/lumio/v1/op_sol_events/since/{}", self.0))
-        }
-        fn hash(&self) -> TopicHash {
-            self.topic().hash()
         }
     }
 
@@ -435,9 +447,6 @@ pub(crate) mod topics {
         fn topic(&self) -> IdentTopic {
             IdentTopic::new(format!("/lumio/v1/op_move_events/since/{}", self.0))
         }
-        fn hash(&self) -> TopicHash {
-            self.topic().hash()
-        }
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -447,9 +456,6 @@ pub(crate) mod topics {
         type Msg = SlotAttribute;
         fn topic(&self) -> IdentTopic {
             IdentTopic::new(format!("/lumio/v1/lumio_sol_events/since/{}", self.0))
-        }
-        fn hash(&self) -> TopicHash {
-            self.topic().hash()
         }
     }
 
@@ -461,8 +467,25 @@ pub(crate) mod topics {
         fn topic(&self) -> IdentTopic {
             IdentTopic::new(format!("/lumio/v1/lumio_move_events/since/{}", self.0))
         }
-        fn hash(&self) -> TopicHash {
-            self.topic().hash()
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct OpMoveEngineSince(pub lumio_types::Slot);
+
+    impl Topic for OpMoveEngineSince {
+        type Msg = EngineActions;
+        fn topic(&self) -> IdentTopic {
+            IdentTopic::new(format!("/lumio/v1/op_move_engine/since/{}", self.0))
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct OpSolEngineSince(pub lumio_types::Slot);
+
+    impl Topic for OpSolEngineSince {
+        type Msg = EngineActions;
+        fn topic(&self) -> IdentTopic {
+            IdentTopic::new(format!("/lumio/v1/op_sol_engine/since/{}", self.0))
         }
     }
 }

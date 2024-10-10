@@ -15,7 +15,7 @@ use std::ops::ControlFlow;
 use crate::topics::Topic;
 use crate::{
     topics, Auth, Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, LumioCommand,
-    SubscribeCommand,
+    OpMoveCommand, OpSolCommand, SubscribeCommand,
 };
 
 trait IsInterested<Msg> {
@@ -112,63 +112,70 @@ impl_handle_channel! {
 }
 
 impl HandleMsg<topics::OpMoveCommands> for NodeRunner {
-    async fn handle_msg(
-        &mut self,
-        topic: topics::OpMoveEventsSince,
-        _: &gossipsub::Message,
-    ) -> Result<()> {
-        let ch = self
-            .op_move_events_since_handler
-            .as_ref()
-            .expect("We should always have a channel if we subscribed to topic");
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
-        let _ = ch.send((topic.0, sender)).await;
-        tokio::spawn({
-            let cmd_sender = self.cmd_sender.clone();
-            async move {
-                while let Some(msg) = receiver.recv().await {
-                    let msg = bincode::serialize(&msg).unwrap();
-                    if cmd_sender
-                        .send(Command::SendEvent(topic.topic(), msg))
-                        .await
-                        .is_err()
-                    {
-                        break;
+    async fn handle_msg(&mut self, cmd: OpMoveCommand, _: &gossipsub::Message) -> Result<()> {
+        match cmd {
+            OpMoveCommand::SubEventsSince(topic) => {
+                let ch = self
+                    .op_move_events_since_handler
+                    .as_ref()
+                    .expect("We should always have a channel if we subscribed to topic");
+                let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
+                let _ = ch.send((topic.0, sender)).await;
+                tokio::spawn({
+                    let cmd_sender = self.cmd_sender.clone();
+                    async move {
+                        while let Some(msg) = receiver.recv().await {
+                            let msg = bincode::serialize(&msg).unwrap();
+                            if cmd_sender
+                                .send(Command::SendEvent(topic.topic(), msg))
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
                     }
-                }
+                });
             }
-        });
+            OpMoveCommand::EngineSince(topic) => {
+                todo!()
+            }
+        }
+
         Ok(())
     }
 }
 
 impl HandleMsg<topics::OpSolCommands> for NodeRunner {
-    async fn handle_msg(
-        &mut self,
-        topic: topics::OpSolEventsSince,
-        _: &gossipsub::Message,
-    ) -> Result<()> {
-        let ch = self
-            .op_sol_events_since_handler
-            .as_ref()
-            .expect("We should always have a channel if we subscribed to topic");
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
-        let _ = ch.send((topic.0, sender)).await;
-        tokio::spawn({
-            let cmd_sender = self.cmd_sender.clone();
-            async move {
-                while let Some(msg) = receiver.recv().await {
-                    let msg = bincode::serialize(&msg).unwrap();
-                    if cmd_sender
-                        .send(Command::SendEvent(topic.topic(), msg))
-                        .await
-                        .is_err()
-                    {
-                        break;
+    async fn handle_msg(&mut self, cmd: OpSolCommand, _: &gossipsub::Message) -> Result<()> {
+        match cmd {
+            OpSolCommand::SubEventsSince(topic) => {
+                let ch = self
+                    .op_sol_events_since_handler
+                    .as_ref()
+                    .expect("We should always have a channel if we subscribed to topic");
+                let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
+                let _ = ch.send((topic.0, sender)).await;
+                tokio::spawn({
+                    let cmd_sender = self.cmd_sender.clone();
+                    async move {
+                        while let Some(msg) = receiver.recv().await {
+                            let msg = bincode::serialize(&msg).unwrap();
+                            if cmd_sender
+                                .send(Command::SendEvent(topic.topic(), msg))
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
                     }
-                }
+                });
             }
-        });
+            OpSolCommand::EngineSince(topic) => {
+                todo!()
+            }
+        }
         Ok(())
     }
 }
@@ -382,7 +389,7 @@ impl NodeRunner {
                     .insert(topics::OpMoveEventsSince(since).hash(), sender);
                 self.publish_event(
                     topics::OpMoveCommands.hash(),
-                    &topics::OpMoveEventsSince(since),
+                    &OpMoveCommand::SubEventsSince(topics::OpMoveEventsSince(since)),
                 )
             }
             SubscribeCommand::OpSolSince { sender, since } => {
@@ -390,7 +397,7 @@ impl NodeRunner {
                     .insert(topics::OpSolEventsSince(since).hash(), sender);
                 self.publish_event(
                     topics::OpSolCommands.hash(),
-                    &topics::OpSolEventsSince(since),
+                    &OpSolCommand::SubEventsSince(topics::OpSolEventsSince(since)),
                 )
             }
             SubscribeCommand::LumioOpSolSinceHandler(sender) => {
