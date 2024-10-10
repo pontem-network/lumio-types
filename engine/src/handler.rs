@@ -34,7 +34,8 @@ where
             self.ensure_right_slot(payload.id())?;
 
             if let Some((from, payload)) = skip_range.try_skip(payload) {
-                self.ledger.apply_slot(from, payload).await?;
+                let ledger = self.ledger.clone();
+                tokio::task::spawn_blocking(move || ledger.apply_slot(from, payload)).await??;
             }
         }
         Ok(())
@@ -105,7 +106,7 @@ mod tests {
     use super::*;
 
     fn empty(slot_id: u64) -> SlotAttribute {
-        SlotAttribute::new(slot_id, vec![], None)
+        SlotAttribute::new(slot_id, vec![], None, None)
     }
 
     fn with_events(slot_id: u64) -> SlotAttribute {
@@ -115,6 +116,7 @@ mod tests {
                 account: H256::default(),
                 amount: 2,
             })],
+            None,
             None,
         )
     }

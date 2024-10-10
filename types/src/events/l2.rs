@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use strum::IntoStaticStr;
 
-use crate::h256::H256;
+use crate::{h256::H256, Slot};
 
 use super::Bridge;
 
@@ -20,6 +20,12 @@ pub enum SplL2Event {
         to: H256,
         amount: u64,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EngineActions {
+    pub slot: Slot,
+    pub actions: Vec<EngineAction>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, IntoStaticStr)]
