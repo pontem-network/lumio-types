@@ -353,11 +353,28 @@ impl NodeRunner {
         }
     }
 
-    fn publish_event<E: serde::Serialize>(&mut self, hash: TopicHash, event: &E) {
-        self.publish(
-            hash,
-            bincode::serialize(event).expect("bincode serialization never fails"),
-        )
+    fn publish_event<T>(&mut self, topic: &T, event: &T::Msg)
+    where
+        T: Topic,
+        Self: HandleMsg<T> + IsInterested<T>,
+    {
+        let event = bincode::serialize(event).expect("bincode serialization never fails");
+        match self
+            .swarm
+            .behaviour_mut()
+            .gossipsub
+            .publish(topic.hash(), event)
+        {
+            Ok(_) => (),
+            Err(gossipsub::PublishError::InsufficientPeers) => {
+                // TODO: print topic name
+                tracing::warn!(
+                    "Something might be wrong. Noone listens on topic {}",
+                    std::any::type_name::<T>()
+                )
+            }
+            Err(err) => panic!("Failed to publish message: {err}"),
+        }
     }
 
     fn handle_command(&mut self, cmd: Command) {
@@ -388,7 +405,7 @@ impl NodeRunner {
                 self.op_move_events_since_subs
                     .insert(topics::OpMoveEventsSince(since).hash(), sender);
                 self.publish_event(
-                    topics::OpMoveCommands.hash(),
+                    &topics::OpMoveCommands,
                     &OpMoveCommand::SubEventsSince(topics::OpMoveEventsSince(since)),
                 )
             }
@@ -396,7 +413,7 @@ impl NodeRunner {
                 self.op_sol_events_since_subs
                     .insert(topics::OpSolEventsSince(since).hash(), sender);
                 self.publish_event(
-                    topics::OpSolCommands.hash(),
+                    &topics::OpSolCommands,
                     &OpSolCommand::SubEventsSince(topics::OpSolEventsSince(since)),
                 )
             }
@@ -410,7 +427,7 @@ impl NodeRunner {
                 self.lumio_move_events_since_subs
                     .insert(topics::LumioMoveEventsSince(since).hash(), sender);
                 self.publish_event(
-                    topics::LumioCommands.hash(),
+                    &topics::LumioCommands,
                     &LumioCommand::MoveSubscribeSince(topics::LumioMoveEventsSince(since)),
                 )
             }
@@ -418,7 +435,7 @@ impl NodeRunner {
                 self.lumio_sol_events_since_subs
                     .insert(topics::LumioSolEventsSince(since).hash(), sender);
                 self.publish_event(
-                    topics::LumioCommands.hash(),
+                    &topics::LumioCommands,
                     &LumioCommand::SolSubscribeSince(topics::LumioSolEventsSince(since)),
                 )
             }
