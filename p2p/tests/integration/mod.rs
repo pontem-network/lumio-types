@@ -79,6 +79,43 @@ async fn simple() {
 }
 
 #[tokio::test]
+async fn many_nodes() {
+    super::init();
+
+    let nodes = start_nodes().await.take(5).collect::<Vec<_>>();
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    let streams = futures::stream::iter(nodes[1..].iter())
+        .then(|n| async {
+            let s = n.subscribe_lumio_op_sol_events().await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            s
+        })
+        .collect::<Vec<_>>()
+        .await;
+
+    nodes[0]
+        .send_lumio_op_sol(SlotAttribute::new(
+            1,
+            vec![],
+            Some((0, PayloadStatus::Pending)),
+        ))
+        .await
+        .unwrap();
+
+    for mut s in streams {
+        assert_eq!(
+            s.next().await,
+            Some(SlotAttribute::new(
+                1,
+                vec![],
+                Some((0, PayloadStatus::Pending)),
+            ))
+        );
+    }
+}
+
+#[tokio::test]
 async fn sub_since() {
     super::init();
 
