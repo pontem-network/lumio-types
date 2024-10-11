@@ -6,6 +6,8 @@ use lumio_types::p2p::{PayloadStatus, SlotAttribute, SlotPayload, SlotPayloadWit
 use tokio::{runtime::Runtime, time::sleep};
 use tracing::info;
 
+use crate::init;
+
 async fn two_nodes() -> (Node, Node) {
     let jwt = rand::random::<JwtSecret>();
     let node1_addr = format!(
@@ -44,7 +46,7 @@ async fn two_nodes() -> (Node, Node) {
 }
 
 const JWT: [u8; 32] = [
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
 ];
 
 async fn two_nodes2(boot: &[u16], port1: u16, port2: u16) -> (Node, Node) {
@@ -93,6 +95,71 @@ async fn two_nodes2(boot: &[u16], port1: u16, port2: u16) -> (Node, Node) {
     (node1, node2)
 }
 
+#[tokio::test]
+async fn test_demo_nodes() {
+    init();
+
+    let jwt = JwtSecret::new(JWT);
+
+    let (mut nodes, _) = (0..4).fold(
+        (Vec::new(), Vec::new()),
+        |(mut nodes, mut bootstrap_addresses), n| {
+            let listen_on = format!("/ip4/127.0.0.1/tcp/{}", 50050 + n)
+                .parse::<Multiaddr>()
+                .unwrap();
+
+            let (node2, runner) = Node::new(
+                libp2p::identity::Keypair::generate_ed25519(),
+                Config {
+                    listen_on: vec![listen_on.clone()],
+                    bootstrap_addresses: bootstrap_addresses.clone(),
+                    jwt,
+                },
+            )
+            .unwrap();
+            tokio::spawn(runner.run());
+            tracing::info!("Finished with Node {n}");
+
+            bootstrap_addresses.push(listen_on);
+            nodes.push(node2);
+
+            (nodes, bootstrap_addresses)
+        },
+    );
+    sleep(Duration::from_millis(100)).await;
+
+    let main_node = nodes.swap_remove(0);
+
+    let _j = nodes
+        .into_iter()
+        .enumerate()
+        .map(|(n, node)| {
+            let r = Runtime::new().unwrap();
+            r.spawn(async move {
+                let mut ev = node.subscribe_lumio_op_sol_events().await.unwrap();
+                while let Some(s) = ev.next().await {
+                    info!("{n}: {s:#?}");
+                }
+            });
+            r
+        })
+        .collect::<Vec<_>>();
+
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+    for n in 1..u64::MAX {
+        main_node
+            .send_lumio_op_sol(SlotAttribute::new(
+                n,
+                vec![],
+                Some((n - 1, PayloadStatus::Pending)),
+            ))
+            .await
+            .unwrap();
+
+        sleep(Duration::from_secs(5)).await;
+    }
+}
 #[tokio::test]
 async fn simple() {
     super::init();
@@ -187,4 +254,10 @@ async fn sub_lumio_since() {
     };
 
     assert_eq!(lumio_sol_events.next().await.unwrap().slot_id, 14);
+}
+
+#[tokio::test]
+async fn test_client() {
+    init();
+    //
 }
