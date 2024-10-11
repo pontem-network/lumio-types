@@ -4,6 +4,7 @@ use eyre::{Result, WrapErr};
 use futures::prelude::*;
 use libp2p::multiaddr::Multiaddr;
 use libp2p::{gossipsub, mdns};
+use lumio_types::events::l2::EngineActions;
 use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
 use lumio_types::Slot;
 use serde::{Deserialize, Serialize};
@@ -42,12 +43,22 @@ enum SubscribeCommand {
         since: Slot,
         sender: tokio::sync::mpsc::Sender<SlotPayloadWithEvents>,
     },
+    /// Events from op-move to op-sol
+    MoveEngineSince {
+        since: Slot,
+        sender: tokio::sync::mpsc::Sender<EngineActions>,
+    },
     /// Events from op-sol to lumio
     Sol(tokio::sync::mpsc::Sender<SlotPayloadWithEvents>),
     /// Events from op-sol to lumio
     SolSince {
         since: Slot,
         sender: tokio::sync::mpsc::Sender<SlotPayloadWithEvents>,
+    },
+    /// Events from op-sol to op-move
+    SolEngineSince {
+        since: Slot,
+        sender: tokio::sync::mpsc::Sender<EngineActions>,
     },
     /// Events from lumio to op-sol
     LumioSol(tokio::sync::mpsc::Sender<SlotAttribute>),
@@ -67,9 +78,17 @@ enum SubscribeCommand {
     MoveSinceHandler(
         tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>,
     ),
+    /// Give away streams from `MoveEngineSince` subscription
+    MoveEngineSinceHandler(
+        tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<EngineActions>)>,
+    ),
     /// Give away streams from `SolSince` subscription
     SolSinceHandler(
         tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>,
+    ),
+    /// Give away streams from `SolEngineSince` subscription
+    SolEngineSinceHandler(
+        tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<EngineActions>)>,
     ),
     /// Give away streams from `LumioSolSince` subscription
     LumioSolSinceHandler(
@@ -86,14 +105,20 @@ impl SubscribeCommand {
         match self {
             Self::Move(_) => topics::MoveEvents.topic(),
             Self::MoveSince { since, .. } => topics::MoveEventsSince(*since).topic(),
+            Self::MoveEngineSince { since, .. } => topics::MoveEngineSince(*since).topic(),
             Self::Sol(_) => topics::SolEvents.topic(),
             Self::SolSince { since, .. } => topics::SolEventsSince(*since).topic(),
+            Self::SolEngineSince { since, .. } => topics::SolEngineSince(*since).topic(),
             Self::LumioSolSince { since, .. } => topics::LumioSolEventsSince(*since).topic(),
             Self::LumioMoveSince { since, .. } => topics::LumioMoveEventsSince(*since).topic(),
             Self::LumioSol(_) => topics::LumioSolEvents.topic(),
             Self::LumioMove(_) => topics::LumioMoveEvents.topic(),
-            Self::MoveSinceHandler(_) => topics::MoveCommands.topic(),
-            Self::SolSinceHandler(_) => topics::SolCommands.topic(),
+            Self::MoveSinceHandler(_) | Self::MoveEngineSinceHandler(_) => {
+                topics::MoveCommands.topic()
+            }
+            Self::SolSinceHandler(_) | Self::SolEngineSinceHandler(_) => {
+                topics::SolCommands.topic()
+            }
             Self::LumioSolSinceHandler(_) | Self::LumioMoveSinceHandler(_) => {
                 topics::LumioCommands.topic()
             }
@@ -205,6 +230,18 @@ impl Node {
             .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
     }
 
+    pub async fn handle_op_move_engine_since(
+        &self,
+    ) -> Result<
+        impl Stream<Item = (Slot, impl Sink<EngineActions> + Unpin + 'static)> + Unpin + 'static,
+    > {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::MoveEngineSinceHandler(sender))
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver)
+            .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
+    }
+
     pub async fn handle_op_sol_since(
         &self,
     ) -> Result<
@@ -212,6 +249,18 @@ impl Node {
     > {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
         self.subscribe_event(SubscribeCommand::SolSinceHandler(sender))
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver)
+            .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
+    }
+
+    pub async fn handle_op_sol_engine_since(
+        &self,
+    ) -> Result<
+        impl Stream<Item = (Slot, impl Sink<EngineActions> + Unpin + 'static)> + Unpin + 'static,
+    > {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::SolEngineSinceHandler(sender))
             .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver)
             .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
@@ -321,6 +370,26 @@ impl Node {
     ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
         self.subscribe_event(SubscribeCommand::LumioMoveSince { since, sender })
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
+    }
+
+    pub async fn subscribe_lumio_op_move_engine_since(
+        &self,
+        since: Slot,
+    ) -> Result<impl Stream<Item = EngineActions> + Unpin + 'static> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::MoveEngineSince { since, sender })
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
+    }
+
+    pub async fn subscribe_lumio_op_sol_engine_since(
+        &self,
+        since: Slot,
+    ) -> Result<impl Stream<Item = EngineActions> + Unpin + 'static> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::SolEngineSince { since, sender })
             .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
