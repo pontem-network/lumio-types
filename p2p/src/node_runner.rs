@@ -6,6 +6,7 @@ use libp2p::{
     swarm::SwarmEvent,
     PeerId, Swarm,
 };
+use lumio_types::events::l2::EngineActions;
 use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
 use lumio_types::Slot;
 
@@ -15,7 +16,7 @@ use std::ops::ControlFlow;
 use crate::topics::Topic;
 use crate::{
     topics, Auth, Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, LumioCommand,
-    SubscribeCommand,
+    MoveCommand, SolCommand, SubscribeCommand,
 };
 
 trait IsInterested<Msg> {
@@ -51,14 +52,20 @@ pub struct NodeRunner {
     lumio_move_events: Option<tokio::sync::mpsc::Sender<SlotAttribute>>,
 
     op_move_events_since_subs: HashMap<TopicHash, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
+    op_move_engine_since_subs: HashMap<TopicHash, tokio::sync::mpsc::Sender<EngineActions>>,
     op_sol_events_since_subs: HashMap<TopicHash, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
+    op_sol_engine_since_subs: HashMap<TopicHash, tokio::sync::mpsc::Sender<EngineActions>>,
     lumio_move_events_since_subs: HashMap<TopicHash, tokio::sync::mpsc::Sender<SlotAttribute>>,
     lumio_sol_events_since_subs: HashMap<TopicHash, tokio::sync::mpsc::Sender<SlotAttribute>>,
 
     op_move_events_since_handler:
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>>,
+    op_move_engine_since_handler:
+        Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<EngineActions>)>>,
     op_sol_events_since_handler:
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>>,
+    op_sol_engine_since_handler:
+        Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<EngineActions>)>>,
     lumio_move_events_since_handler:
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotAttribute>)>>,
     lumio_sol_events_since_handler:
@@ -104,78 +111,113 @@ macro_rules! impl_handle_channel {
 
 impl_handle_channel! {
     NodeRunner {
-        topics::OpMoveEvents => op_move_events,
-        topics::OpSolEvents => op_sol_events,
+        topics::MoveEvents => op_move_events,
+        topics::SolEvents => op_sol_events,
         topics::LumioSolEvents => lumio_sol_events,
         topics::LumioMoveEvents => lumio_move_events,
     }
 }
 
-impl HandleMsg<topics::OpMoveCommands> for NodeRunner {
-    async fn handle_msg(
-        &mut self,
-        topic: topics::OpMoveEventsSince,
-        _: &gossipsub::Message,
-    ) -> Result<()> {
-        let ch = self
-            .op_move_events_since_handler
-            .as_ref()
-            .expect("We should always have a channel if we subscribed to topic");
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
-        let _ = ch.send((topic.0, sender)).await;
-        tokio::spawn({
-            let cmd_sender = self.cmd_sender.clone();
-            async move {
-                while let Some(msg) = receiver.recv().await {
-                    let msg = bincode::serialize(&msg).unwrap();
-                    if cmd_sender
-                        .send(Command::SendEvent(topic.topic(), msg))
-                        .await
-                        .is_err()
-                    {
-                        break;
-                    }
-                }
+impl HandleMsg<topics::MoveCommands> for NodeRunner {
+    async fn handle_msg(&mut self, cmd: MoveCommand, _: &gossipsub::Message) -> Result<()> {
+        match cmd {
+            MoveCommand::SubEventsSince(topic) => {
+                let ch = self
+                    .op_move_events_since_handler
+                    .as_ref()
+                    .expect("We should always have a channel if we subscribed to topic");
+                let (sender, receiver) = tokio::sync::mpsc::channel(10);
+                let _ = ch.send((topic.0, sender)).await;
+                self.spawn_sending_messages_from_receiver(topic.topic(), receiver);
             }
-        });
+            MoveCommand::EngineSince(topic) => {
+                let ch = self
+                    .op_move_engine_since_handler
+                    .as_ref()
+                    .expect("We should always have a channel if we subscribed to topic");
+                let (sender, receiver) = tokio::sync::mpsc::channel(10);
+                let _ = ch.send((topic.0, sender)).await;
+                self.spawn_sending_messages_from_receiver(topic.topic(), receiver);
+            }
+        }
+
         Ok(())
     }
 }
 
-impl HandleMsg<topics::OpSolCommands> for NodeRunner {
+impl IsInterested<topics::MoveEngineSince> for NodeRunner {
+    fn is_interested(&self, msg: &gossipsub::Message) -> bool {
+        self.op_move_engine_since_subs.contains_key(&msg.topic)
+    }
+}
+
+impl HandleMsg<topics::MoveEngineSince> for NodeRunner {
     async fn handle_msg(
         &mut self,
-        topic: topics::OpSolEventsSince,
-        _: &gossipsub::Message,
+        msg: EngineActions,
+        gossipsub::Message { topic, .. }: &gossipsub::Message,
     ) -> Result<()> {
-        let ch = self
-            .op_sol_events_since_handler
-            .as_ref()
-            .expect("We should always have a channel if we subscribed to topic");
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
-        let _ = ch.send((topic.0, sender)).await;
-        tokio::spawn({
-            let cmd_sender = self.cmd_sender.clone();
-            async move {
-                while let Some(msg) = receiver.recv().await {
-                    let msg = bincode::serialize(&msg).unwrap();
-                    if cmd_sender
-                        .send(Command::SendEvent(topic.topic(), msg))
-                        .await
-                        .is_err()
-                    {
-                        break;
-                    }
-                }
+        let _ = self
+            .op_move_engine_since_subs
+            .get(topic)
+            .unwrap()
+            .send(msg)
+            .await;
+        Ok(())
+    }
+}
+
+impl HandleMsg<topics::SolCommands> for NodeRunner {
+    async fn handle_msg(&mut self, cmd: SolCommand, _: &gossipsub::Message) -> Result<()> {
+        match cmd {
+            SolCommand::SubEventsSince(topic) => {
+                let ch = self
+                    .op_sol_events_since_handler
+                    .as_ref()
+                    .expect("We should always have a channel if we subscribed to topic");
+                let (sender, receiver) = tokio::sync::mpsc::channel(10);
+                let _ = ch.send((topic.0, sender)).await;
+                self.spawn_sending_messages_from_receiver(topic.topic(), receiver);
             }
-        });
+            SolCommand::EngineSince(topic) => {
+                let ch = self
+                    .op_sol_engine_since_handler
+                    .as_ref()
+                    .expect("We should always have a channel if we subscribed to topic");
+                let (sender, receiver) = tokio::sync::mpsc::channel(10);
+                let _ = ch.send((topic.0, sender)).await;
+                self.spawn_sending_messages_from_receiver(topic.topic(), receiver);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl IsInterested<topics::SolEngineSince> for NodeRunner {
+    fn is_interested(&self, msg: &gossipsub::Message) -> bool {
+        self.op_sol_engine_since_subs.contains_key(&msg.topic)
+    }
+}
+
+impl HandleMsg<topics::SolEngineSince> for NodeRunner {
+    async fn handle_msg(
+        &mut self,
+        msg: EngineActions,
+        gossipsub::Message { topic, .. }: &gossipsub::Message,
+    ) -> Result<()> {
+        let _ = self
+            .op_move_engine_since_subs
+            .get(topic)
+            .unwrap()
+            .send(msg)
+            .await;
         Ok(())
     }
 }
 
 impl HandleMsg<topics::LumioCommands> for NodeRunner {
     async fn handle_msg(&mut self, cmd: LumioCommand, _: &gossipsub::Message) -> Result<()> {
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(10);
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
         let topic = match cmd {
             LumioCommand::SolSubscribeSince(topic) => {
                 let ch = self
@@ -194,21 +236,9 @@ impl HandleMsg<topics::LumioCommands> for NodeRunner {
                 topic.topic()
             }
         };
-        tokio::spawn({
-            let cmd_sender = self.cmd_sender.clone();
-            async move {
-                while let Some(msg) = receiver.recv().await {
-                    let msg = bincode::serialize(&msg).unwrap();
-                    if cmd_sender
-                        .send(Command::SendEvent(topic.clone(), msg))
-                        .await
-                        .is_err()
-                    {
-                        break;
-                    }
-                }
-            }
-        });
+
+        self.spawn_sending_messages_from_receiver(topic, receiver);
+
         Ok(())
     }
 }
@@ -257,13 +287,13 @@ impl HandleMsg<topics::LumioSolEventsSince> for NodeRunner {
     }
 }
 
-impl IsInterested<topics::OpMoveEventsSince> for NodeRunner {
+impl IsInterested<topics::MoveEventsSince> for NodeRunner {
     fn is_interested(&self, msg: &gossipsub::Message) -> bool {
         self.op_move_events_since_subs.contains_key(&msg.topic)
     }
 }
 
-impl HandleMsg<topics::OpMoveEventsSince> for NodeRunner {
+impl HandleMsg<topics::MoveEventsSince> for NodeRunner {
     async fn handle_msg(
         &mut self,
         msg: SlotPayloadWithEvents,
@@ -279,13 +309,13 @@ impl HandleMsg<topics::OpMoveEventsSince> for NodeRunner {
     }
 }
 
-impl IsInterested<topics::OpSolEventsSince> for NodeRunner {
+impl IsInterested<topics::SolEventsSince> for NodeRunner {
     fn is_interested(&self, msg: &gossipsub::Message) -> bool {
         self.op_sol_events_since_subs.contains_key(&msg.topic)
     }
 }
 
-impl HandleMsg<topics::OpSolEventsSince> for NodeRunner {
+impl HandleMsg<topics::SolEventsSince> for NodeRunner {
     async fn handle_msg(
         &mut self,
         msg: SlotPayloadWithEvents,
@@ -302,6 +332,28 @@ impl HandleMsg<topics::OpSolEventsSince> for NodeRunner {
 }
 
 impl NodeRunner {
+    fn spawn_sending_messages_from_receiver(
+        &self,
+        topic: gossipsub::IdentTopic,
+        mut receiver: tokio::sync::mpsc::Receiver<impl serde::Serialize + Send + 'static>,
+    ) {
+        tokio::spawn({
+            let cmd_sender = self.cmd_sender.clone();
+            async move {
+                while let Some(msg) = receiver.recv().await {
+                    let msg = bincode::serialize(&msg).unwrap();
+                    if cmd_sender
+                        .send(Command::SendEvent(topic.clone(), msg))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
     pub(crate) fn new(
         swarm: Swarm<LumioBehaviour>,
         jwt: JwtSecret,
@@ -319,9 +371,13 @@ impl NodeRunner {
             lumio_sol_events: None,
             lumio_move_events: None,
             op_move_events_since_subs: Default::default(),
+            op_move_engine_since_subs: Default::default(),
             op_sol_events_since_subs: Default::default(),
+            op_sol_engine_since_subs: Default::default(),
             op_move_events_since_handler: None,
+            op_move_engine_since_handler: None,
             op_sol_events_since_handler: None,
+            op_sol_engine_since_handler: None,
             lumio_move_events_since_handler: None,
             lumio_sol_events_since_handler: None,
             lumio_move_events_since_subs: Default::default(),
@@ -346,11 +402,28 @@ impl NodeRunner {
         }
     }
 
-    fn publish_event<E: serde::Serialize>(&mut self, hash: TopicHash, event: &E) {
-        self.publish(
-            hash,
-            bincode::serialize(event).expect("bincode serialization never fails"),
-        )
+    fn publish_event<T>(&mut self, topic: &T, event: &T::Msg)
+    where
+        T: Topic,
+        Self: HandleMsg<T> + IsInterested<T>,
+    {
+        let event = bincode::serialize(event).expect("bincode serialization never fails");
+        match self
+            .swarm
+            .behaviour_mut()
+            .gossipsub
+            .publish(topic.hash(), event)
+        {
+            Ok(_) => (),
+            Err(gossipsub::PublishError::InsufficientPeers) => {
+                // TODO: print topic name
+                tracing::warn!(
+                    "Something might be wrong. Noone listens on topic {}",
+                    std::any::type_name::<T>()
+                )
+            }
+            Err(err) => panic!("Failed to publish message: {err}"),
+        }
     }
 
     fn handle_command(&mut self, cmd: Command) {
@@ -367,51 +440,73 @@ impl NodeRunner {
             .subscribe(&cmd.topic())
             .expect("Something went terribly wrong, as we failed to subscribe to some topic");
         match cmd {
-            SubscribeCommand::OpMove(sender) => self.op_move_events = Some(sender),
-            SubscribeCommand::OpSol(sender) => self.op_sol_events = Some(sender),
-            SubscribeCommand::LumioOpSol(sender) => self.lumio_sol_events = Some(sender),
-            SubscribeCommand::LumioOpMove(sender) => self.lumio_move_events = Some(sender),
-            SubscribeCommand::OpMoveSinceHandler(sender) => {
+            SubscribeCommand::Move(sender) => self.op_move_events = Some(sender),
+            SubscribeCommand::Sol(sender) => self.op_sol_events = Some(sender),
+            SubscribeCommand::LumioSol(sender) => self.lumio_sol_events = Some(sender),
+            SubscribeCommand::LumioMove(sender) => self.lumio_move_events = Some(sender),
+            SubscribeCommand::MoveSinceHandler(sender) => {
                 self.op_move_events_since_handler = Some(sender)
             }
-            SubscribeCommand::OpSolSinceHandler(sender) => {
+            SubscribeCommand::MoveEngineSinceHandler(sender) => {
+                self.op_move_engine_since_handler = Some(sender)
+            }
+            SubscribeCommand::SolSinceHandler(sender) => {
                 self.op_sol_events_since_handler = Some(sender)
             }
-            SubscribeCommand::OpMoveSince { sender, since } => {
+            SubscribeCommand::SolEngineSinceHandler(sender) => {
+                self.op_sol_engine_since_handler = Some(sender)
+            }
+            SubscribeCommand::MoveSince { sender, since } => {
                 self.op_move_events_since_subs
-                    .insert(topics::OpMoveEventsSince(since).hash(), sender);
+                    .insert(topics::MoveEventsSince(since).hash(), sender);
                 self.publish_event(
-                    topics::OpMoveCommands.hash(),
-                    &topics::OpMoveEventsSince(since),
+                    &topics::MoveCommands,
+                    &MoveCommand::SubEventsSince(topics::MoveEventsSince(since)),
                 )
             }
-            SubscribeCommand::OpSolSince { sender, since } => {
+            SubscribeCommand::MoveEngineSince { sender, since } => {
+                self.op_move_engine_since_subs
+                    .insert(topics::MoveEngineSince(since).hash(), sender);
+                self.publish_event(
+                    &topics::MoveCommands,
+                    &MoveCommand::EngineSince(topics::MoveEngineSince(since)),
+                )
+            }
+            SubscribeCommand::SolSince { sender, since } => {
                 self.op_sol_events_since_subs
-                    .insert(topics::OpSolEventsSince(since).hash(), sender);
+                    .insert(topics::SolEventsSince(since).hash(), sender);
                 self.publish_event(
-                    topics::OpSolCommands.hash(),
-                    &topics::OpSolEventsSince(since),
+                    &topics::SolCommands,
+                    &SolCommand::SubEventsSince(topics::SolEventsSince(since)),
                 )
             }
-            SubscribeCommand::LumioOpSolSinceHandler(sender) => {
+            SubscribeCommand::SolEngineSince { sender, since } => {
+                self.op_move_engine_since_subs
+                    .insert(topics::SolEngineSince(since).hash(), sender);
+                self.publish_event(
+                    &topics::SolCommands,
+                    &SolCommand::EngineSince(topics::SolEngineSince(since)),
+                )
+            }
+            SubscribeCommand::LumioSolSinceHandler(sender) => {
                 self.lumio_sol_events_since_handler = Some(sender)
             }
-            SubscribeCommand::LumioOpMoveSinceHandler(sender) => {
+            SubscribeCommand::LumioMoveSinceHandler(sender) => {
                 self.lumio_move_events_since_handler = Some(sender)
             }
-            SubscribeCommand::LumioOpMoveSince { sender, since } => {
+            SubscribeCommand::LumioMoveSince { sender, since } => {
                 self.lumio_move_events_since_subs
                     .insert(topics::LumioMoveEventsSince(since).hash(), sender);
                 self.publish_event(
-                    topics::LumioCommands.hash(),
+                    &topics::LumioCommands,
                     &LumioCommand::MoveSubscribeSince(topics::LumioMoveEventsSince(since)),
                 )
             }
-            SubscribeCommand::LumioOpSolSince { sender, since } => {
+            SubscribeCommand::LumioSolSince { sender, since } => {
                 self.lumio_sol_events_since_subs
                     .insert(topics::LumioSolEventsSince(since).hash(), sender);
                 self.publish_event(
-                    topics::LumioCommands.hash(),
+                    &topics::LumioCommands,
                     &LumioCommand::SolSubscribeSince(topics::LumioSolEventsSince(since)),
                 )
             }
@@ -452,18 +547,27 @@ impl NodeRunner {
             return ControlFlow::Break(Ok(()));
         }
 
-        self.try_run_msg::<topics::OpMoveEvents>(msg).await?;
-        self.try_run_msg::<topics::OpSolEvents>(msg).await?;
-        self.try_run_msg::<topics::LumioMoveEvents>(msg).await?;
-        self.try_run_msg::<topics::LumioSolEvents>(msg).await?;
-        self.try_run_msg::<topics::OpMoveCommands>(msg).await?;
-        self.try_run_msg::<topics::OpSolCommands>(msg).await?;
-        self.try_run_msg::<topics::OpMoveEventsSince>(msg).await?;
-        self.try_run_msg::<topics::OpSolEventsSince>(msg).await?;
-        self.try_run_msg::<topics::LumioCommands>(msg).await?;
-        self.try_run_msg::<topics::LumioMoveEventsSince>(msg)
-            .await?;
-        self.try_run_msg::<topics::LumioSolEventsSince>(msg).await?;
+        macro_rules! run_topics {
+            ( $($topic:ident),* $(,)? ) => {$(
+                self.try_run_msg::<topics::$topic>(msg).await?;
+            )*}
+        }
+
+        run_topics! {
+            LumioCommands,
+            LumioMoveEvents,
+            LumioMoveEventsSince,
+            LumioSolEvents,
+            LumioSolEventsSince,
+            MoveCommands,
+            MoveEngineSince,
+            MoveEvents,
+            MoveEventsSince,
+            SolCommands,
+            SolEngineSince,
+            SolEvents,
+            SolEventsSince,
+        };
 
         tracing::debug!(topic = ?msg.topic, "Ignoring message from unknown topic");
 
