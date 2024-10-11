@@ -128,7 +128,7 @@ impl Node {
                 // To content-address message, we can take the hash of message and use it as an ID.
                 let message_id_fn = |message: &gossipsub::Message| {
                     let mut s = std::hash::DefaultHasher::new();
-                    message.data.hash(&mut s);
+                    message.hash(&mut s);
                     gossipsub::MessageId::from(s.finish().to_string())
                 };
 
