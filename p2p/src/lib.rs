@@ -132,7 +132,7 @@ enum Command {
 
 #[derive(Debug, Clone)]
 pub struct Node {
-    cmd_sender: tokio::sync::mpsc::Sender<Command>,
+    cmd_sender: tokio::sync::mpsc::Sender<(Command, tokio::sync::oneshot::Sender<()>)>,
 }
 
 impl Node {
@@ -206,11 +206,33 @@ impl Node {
         Ok((Self { cmd_sender }, node_runner))
     }
 
-    async fn subscribe_event(&self, cmd: SubscribeCommand) -> Result<()> {
+    async fn send_cmd_and_wait_completion(&self, cmd: Command) -> Result<()> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
         self.cmd_sender
-            .send(Command::Subscribe(cmd))
+            .send((cmd, sender))
             .await
-            .context("Node runner is probably dead")
+            .context("Node runner is probably dead")?;
+        if receiver.await.is_err() {
+            return Err(eyre::eyre!("Node runner is probably dead"));
+        }
+
+        Ok(())
+    }
+
+    async fn subscribe_event(&self, cmd: SubscribeCommand) -> Result<()> {
+        self.send_cmd_and_wait_completion(Command::Subscribe(cmd))
+            .await
+            .context("Failed to subscribe")
+    }
+
+    async fn send_event(&self, topic: impl Topic, event: impl serde::Serialize) -> Result<()> {
+        tracing::debug!(topic = %topic.topic(), "Sending event");
+        self.send_cmd_and_wait_completion(Command::SendEvent(
+            topic.topic(),
+            bincode::serialize(&event).unwrap(),
+        ))
+        .await
+        .context("Failed to send event")
     }
 
     pub async fn handle_op_move_since(
@@ -387,18 +409,6 @@ impl Node {
         self.subscribe_event(SubscribeCommand::SolEngineSince { since, sender })
             .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
-    }
-
-    async fn send_event(&self, topic: impl Topic, event: impl serde::Serialize) -> Result<()> {
-        tracing::debug!(topic = %topic.topic(), "Sending event");
-        self.cmd_sender
-            .send(Command::SendEvent(
-                topic.topic(),
-                bincode::serialize(&event).unwrap(),
-            ))
-            .await
-            .context("Node runner is probably dead")?;
-        Ok(())
     }
 
     pub async fn send_lumio_op_move(&self, events: SlotAttribute) -> Result<()> {
