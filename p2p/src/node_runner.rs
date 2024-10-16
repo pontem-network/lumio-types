@@ -2,7 +2,6 @@ use eyre::{Result, WrapErr};
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{self, TopicHash},
-    mdns,
     swarm::SwarmEvent,
     PeerId, Swarm,
 };
@@ -585,18 +584,6 @@ impl NodeRunner {
                     self.handle_command(cmd)
                 }
                 event = self.swarm.select_next_some() => match event {
-                    SwarmEvent::Behaviour(LumioBehaviourEvent::Mdns(mdns::Event::Discovered(list))) => {
-                        for (peer_id, multiaddr) in list {
-                            tracing::debug!(?peer_id, %multiaddr, "mDNS discovered a new peer");
-                            self.swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
-                        }
-                    },
-                    SwarmEvent::Behaviour(LumioBehaviourEvent::Mdns(mdns::Event::Expired(list))) => {
-                        for (peer_id, multiaddr) in list {
-                            tracing::debug!(?peer_id, %multiaddr, "mDNS discover peer has expired");
-                            self.swarm.behaviour_mut().gossipsub.remove_explicit_peer(&peer_id);
-                        }
-                    },
                     // Send auth as new peer is subscribed
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Gossipsub(gossipsub::Event::Subscribed {
                         topic,

@@ -2,8 +2,8 @@
 
 use eyre::{Result, WrapErr};
 use futures::prelude::*;
+use libp2p::gossipsub;
 use libp2p::multiaddr::Multiaddr;
-use libp2p::{gossipsub, mdns};
 use lumio_types::events::l2::EngineActions;
 use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
 use lumio_types::Slot;
@@ -25,7 +25,6 @@ pub mod node_runner;
 #[derive(libp2p::swarm::NetworkBehaviour)]
 struct LumioBehaviour {
     gossipsub: gossipsub::Behaviour,
-    mdns: mdns::tokio::Behaviour,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -170,11 +169,7 @@ impl Node {
                     gossipsub_config,
                 )?;
 
-                let mdns = mdns::tokio::Behaviour::new(
-                    mdns::Config::default(),
-                    key.public().to_peer_id(),
-                )?;
-                Ok(LumioBehaviour { gossipsub, mdns })
+                Ok(LumioBehaviour { gossipsub })
             })?
             .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
             .build();
