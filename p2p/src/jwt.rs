@@ -43,7 +43,7 @@ impl Claims {
 pub const JWT_SECRET_LENGTH: usize = 32;
 
 #[derive(Debug, Clone, Copy)]
-pub struct JwtSecret([u8; JWT_SECRET_LENGTH]);
+pub struct JwtSecret(pub [u8; JWT_SECRET_LENGTH]);
 
 impl std::fmt::Display for JwtSecret {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -1,9 +1,14 @@
 #![cfg_attr(test, allow(unused_crate_dependencies))]
 
+use either::Either;
 use eyre::{Result, WrapErr};
 use futures::prelude::*;
-use libp2p::multiaddr::Multiaddr;
-use libp2p::{gossipsub, mdns};
+use libp2p::{
+    core::transport::upgrade::Version,
+    gossipsub, mdns, noise,
+    pnet::{PnetConfig, PreSharedKey},
+    tcp, yamux, Multiaddr, Transport,
+};
 use lumio_types::events::l2::EngineActions;
 use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
 use lumio_types::Slot;
@@ -141,14 +146,38 @@ impl Node {
         keypair: libp2p::identity::Keypair,
         cfg: Config,
     ) -> eyre::Result<(Self, NodeRunner)> {
+        let psk = Some(PreSharedKey::new(cfg.jwt.0));
+
         let mut swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
             .with_tokio()
-            .with_tcp(
-                libp2p::tcp::Config::default(),
-                libp2p::noise::Config::new,
-                libp2p::yamux::Config::default,
-            )?
+            // .with_tcp(
+            //     libp2p::tcp::Config::default(),
+            //     libp2p::noise::Config::new,
+            //     libp2p::yamux::Config::default,
+            // )?
             .with_quic()
+            .with_other_transport(|key| {
+                dbg!(&psk);
+
+                let noise_config = noise::Config::new(key).unwrap();
+                let yamux_config = yamux::Config::default();
+                let base_transport =
+                    tcp::tokio::Transport::new(tcp::Config::default().nodelay(true));
+                let maybe_encrypted = match psk {
+                    Some(psk) => Either::Left(base_transport.and_then(move |socket, _| {
+                        dbg!("aaaa");
+                        PnetConfig::new(psk).handshake(socket)
+                    })),
+                    None => {
+                        dbg!("bbbb");
+                        Either::Right(base_transport)
+                    }
+                };
+                maybe_encrypted
+                    .upgrade(Version::V1Lazy)
+                    .authenticate(noise_config)
+                    .multiplex(yamux_config)
+            })?
             .with_behaviour(|key| {
                 // To content-address message, we can take the hash of message and use it as an ID.
                 let message_id_fn = |message: &gossipsub::Message| {
@@ -182,7 +211,7 @@ impl Node {
         let Config {
             listen_on,
             bootstrap_addresses,
-            jwt,
+            ..
         } = cfg;
 
         for a in listen_on {
@@ -192,22 +221,24 @@ impl Node {
             swarm.dial(a).context("Failed to dial address")?;
         }
 
-        swarm
-            .behaviour_mut()
-            .gossipsub
-            .subscribe(&topics::Auth.topic())?;
+        // swarm
+        //     .behaviour_mut()
+        //     .gossipsub
+        //     .subscribe(&topics::Auth.topic())?;
 
-        match swarm
-            .behaviour_mut()
-            .gossipsub
-            .publish(topics::Auth.topic().clone(), jwt.claim()?)
-        {
-            Ok(_) => tracing::debug!("Send auth message"),
-            // We don't care if there no peers at this stage. We'll auth once someone subscribes
-            Err(gossipsub::PublishError::InsufficientPeers) => tracing::warn!("No peers for auth"),
-            Err(err) => return Err(err).context("Failed to auth"),
-        }
-        let (node_runner, cmd_sender) = NodeRunner::new(swarm, jwt);
+        // match swarm
+        //     .behaviour_mut()
+        //     .gossipsub
+        //     .publish(topics::Auth.topic().clone(), jwt.claim()?)
+        // {
+        //     Ok(_) => tracing::debug!("Send auth message"),
+        //     // We don't care if there no peers at this stage. We'll auth once someone subscribes
+        //     Err(gossipsub::PublishError::InsufficientPeers) => tracing::warn!("No peers for auth"),
+        //     Err(err) => return Err(err).context("Failed to auth"),
+        // }
+        let (node_runner, cmd_sender) = NodeRunner::new(
+            swarm, // , jwt
+        );
         Ok((Self { cmd_sender }, node_runner))
     }
 

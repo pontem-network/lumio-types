@@ -1,16 +1,19 @@
 [package]
-name = "lumio-p2p"
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
+name = "lumio-p2p"
 repository.workspace = true
 version.workspace = true
 
 [dependencies]
 bincode.workspace = true
+either = "*"
 eyre.workspace = true
 futures.workspace = true
-libp2p = { workspace = true, features = [
+hex.workspace = true
+jsonwebtoken.workspace = true
+libp2p = {workspace = true, features = [
   "gossipsub",
   "macros",
   "mdns",
@@ -20,28 +23,29 @@ libp2p = { workspace = true, features = [
   "tcp",
   "tokio",
   "yamux",
-] }
-tracing.workspace = true
-hex.workspace = true
+  "identify",
+  "pnet",
+  "ping",
+]}
 rand.workspace = true
-jsonwebtoken.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["sync", "macros"] }
+tokio = {workspace = true, features = ["sync", "macros"]}
 tokio-stream.workspace = true
 tokio-util.workspace = true
+tracing.workspace = true
 
 lumio-types.workspace = true
 
 [dev-dependencies]
 portpicker.workspace = true
-tracing-subscriber = { workspace = true, features = [
+tokio = {workspace = true, features = ["test-util", "macros"]}
+tracing-subscriber = {workspace = true, features = [
   "ansi",
   "env-filter",
   "fmt",
   "tracing-log",
-] }
-tokio = { workspace = true, features = ["test-util", "macros"] }
+]}
 
 [lints]
 workspace = true

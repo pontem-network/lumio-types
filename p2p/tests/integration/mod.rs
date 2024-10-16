@@ -1,6 +1,9 @@
+use std::{fmt::Display, time::Duration};
+
 use futures::prelude::*;
 use lumio_p2p::{libp2p::Multiaddr, Config, JwtSecret, Node};
 use lumio_types::p2p::{PayloadStatus, SlotAttribute, SlotPayload, SlotPayloadWithEvents};
+use tokio::time::sleep;
 
 async fn start_nodes() -> impl Iterator<Item = Node> {
     let jwt = rand::random::<JwtSecret>();
@@ -20,7 +23,7 @@ async fn start_nodes() -> impl Iterator<Item = Node> {
                 Config {
                     listen_on: vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()],
                     bootstrap_addresses: vec![bootstrap_addr.clone()],
-                    jwt: jwt.clone(),
+                    jwt,
                 },
             )
             .unwrap();
@@ -177,4 +180,93 @@ async fn sub_lumio_since() {
     };
 
     assert_eq!(lumio_sol_events.next().await.unwrap().slot_id, 14);
+}
+
+#[tokio::test]
+async fn test_auth() {
+    fn port_to_addr<T: Display>(port: T) -> Multiaddr {
+        format!("/ip4/127.0.0.1/tcp/{port}")
+            .parse::<Multiaddr>()
+            .unwrap()
+    }
+
+    fn new_node(jwt: JwtSecret, listen_port: u16, bootstrap_ports: &[u16]) -> Node {
+        let (node, runner) = Node::new(
+            libp2p::identity::Keypair::generate_ed25519(),
+            Config {
+                listen_on: vec![port_to_addr(listen_port)],
+                bootstrap_addresses: bootstrap_ports.iter().map(port_to_addr).collect(),
+                jwt,
+            },
+        )
+        .unwrap();
+        tokio::spawn(runner.run());
+        tracing::info!("Finished with Node {listen_port}");
+        node
+    }
+
+    super::init();
+
+    let jwt1 = rand::random::<JwtSecret>();
+    let jwt2 = rand::random::<JwtSecret>();
+
+    let node1 = new_node(jwt1, 50050, &[50051]);
+    let node2 = new_node(jwt1, 50051, &[50050]);
+
+    let node3 = new_node(jwt2, 50052, &[50050, 50051]);
+
+    sleep(Duration::from_secs(1)).await;
+
+    let mut wait_event = node3.subscribe_lumio_op_sol_events().await.unwrap();
+    let mut op_sol_events = node2.subscribe_lumio_op_sol_events().await.unwrap();
+
+    let h1 = tokio::spawn(async move {
+        if wait_event.next().await.is_some() {
+            panic!("This shouldn't happen.");
+        }
+    });
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+    node1
+        .send_lumio_op_sol(SlotAttribute::new(
+            1,
+            vec![],
+            Some((0, PayloadStatus::Pending)),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        op_sol_events.next().await,
+        Some(SlotAttribute::new(
+            1,
+            vec![],
+            Some((0, PayloadStatus::Pending)),
+        ))
+    );
+
+    node3
+        .send_lumio_op_sol(SlotAttribute::new(
+            1,
+            vec![],
+            Some((0, PayloadStatus::Pending)),
+        ))
+        .await
+        .unwrap();
+    let h2 = tokio::spawn(async move {
+        if op_sol_events.next().await.is_some() {
+            panic!("This shouldn't happen.");
+        }
+    });
+
+    assert!(
+        !h1.is_finished(),
+        "The message was received with different `jwt`"
+    );
+    assert!(
+        !h2.is_finished(),
+        "The message was received with different `jwt`"
+    );
+
+    sleep(Duration::from_secs(1)).await;
 }
