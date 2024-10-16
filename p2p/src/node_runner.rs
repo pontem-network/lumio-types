@@ -1,21 +1,21 @@
-use eyre::{Result, WrapErr};
+use eyre::Result;
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{self, TopicHash},
     swarm::SwarmEvent,
-    PeerId, Swarm,
+    Swarm,
 };
 use lumio_types::events::l2::EngineActions;
 use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
 use lumio_types::Slot;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::ops::ControlFlow;
 
 use crate::topics::Topic;
 use crate::{
-    topics, Auth, Command, JwtSecret, LumioBehaviour, LumioBehaviourEvent, LumioCommand,
-    MoveCommand, SolCommand, SubscribeCommand,
+    topics, Command, LumioBehaviour, LumioBehaviourEvent, LumioCommand, MoveCommand, SolCommand,
+    SubscribeCommand,
 };
 
 trait IsInterested<Msg> {
@@ -38,12 +38,9 @@ trait HandleMsg<T: Topic> {
 
 pub struct NodeRunner {
     swarm: Swarm<LumioBehaviour>,
-    jwt: JwtSecret,
     cmd_receiver: tokio::sync::mpsc::Receiver<(Command, tokio::sync::oneshot::Sender<()>)>,
     // For tasks
     cmd_sender: tokio::sync::mpsc::Sender<(Command, tokio::sync::oneshot::Sender<()>)>,
-
-    authorized: HashSet<PeerId>,
 
     op_move_events: Option<tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
     op_sol_events: Option<tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
@@ -69,20 +66,6 @@ pub struct NodeRunner {
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotAttribute>)>>,
     lumio_sol_events_since_handler:
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotAttribute>)>>,
-}
-
-impl HandleMsg<topics::Auth> for NodeRunner {
-    async fn handle_msg(
-        &mut self,
-        Auth { peer_id, claim }: Auth,
-        _: &gossipsub::Message,
-    ) -> Result<()> {
-        self.jwt
-            .decode(claim)
-            .context("Failed to decode JWT claim")?;
-        self.authorized.insert(peer_id);
-        Ok(())
-    }
 }
 
 macro_rules! impl_handle_channel {
@@ -357,7 +340,6 @@ impl NodeRunner {
 
     pub(crate) fn new(
         swarm: Swarm<LumioBehaviour>,
-        jwt: JwtSecret,
     ) -> (
         Self,
         tokio::sync::mpsc::Sender<(Command, tokio::sync::oneshot::Sender<()>)>,
@@ -365,11 +347,9 @@ impl NodeRunner {
         let (cmd_sender, cmd_receiver) = tokio::sync::mpsc::channel(100);
         let me = Self {
             swarm,
-            jwt,
             cmd_receiver,
             cmd_sender: cmd_sender.clone(),
 
-            authorized: Default::default(),
             op_move_events: None,
             op_sol_events: None,
             lumio_sol_events: None,
@@ -541,18 +521,6 @@ impl NodeRunner {
 
     #[must_use]
     async fn handle_topics(&mut self, msg: &gossipsub::Message) -> ControlFlow<Result<()>> {
-        self.try_run_msg::<topics::Auth>(msg).await?;
-
-        let Some(source) = msg.source else {
-            tracing::debug!(topic = ?msg.topic, "Ignoring message as sender is unknown");
-            return ControlFlow::Break(Ok(()));
-        };
-
-        if !self.authorized.contains(&source) {
-            tracing::trace!(?source, "Ignoring message from unauthorized peer");
-            return ControlFlow::Break(Ok(()));
-        }
-
         macro_rules! run_topics {
             ( $($topic:ident),* $(,)? ) => {$(
                 self.try_run_msg::<topics::$topic>(msg).await?;
@@ -592,26 +560,6 @@ impl NodeRunner {
                     let _ = result.send(());
                 }
                 event = self.swarm.select_next_some() => match event {
-                    // Send auth as new peer is subscribed
-                    SwarmEvent::Behaviour(LumioBehaviourEvent::Gossipsub(gossipsub::Event::Subscribed {
-                        topic,
-                        ..
-                    })) if topic == topics::Auth.hash() => {
-                        let auth = bincode::serialize(&Auth {
-                            peer_id: *self.swarm.local_peer_id(),
-                            claim: self.jwt.claim().expect("Encoding JWT never fails"),
-                        })
-                            .expect("bincode ser never fails");
-
-                        let result =
-                            self.swarm
-                            .behaviour_mut()
-                            .gossipsub
-                            .publish(topics::Auth.topic().clone(), auth);
-                        if let Err(err) = result {
-                            tracing::debug!(?err, "Failed to send auth message because of new peer");
-                        }
-                    }
                     SwarmEvent::Behaviour(LumioBehaviourEvent::Gossipsub(gossipsub::Event::Message {
                         message,
                         ..

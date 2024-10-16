@@ -13,20 +13,16 @@ futures.workspace = true
 libp2p = { workspace = true, features = [
   "gossipsub",
   "macros",
-  "mdns",
   "noise",
-  "quic",
   "serde",
   "tcp",
+  "pnet",
   "tokio",
   "yamux",
 ] }
 tracing.workspace = true
-hex.workspace = true
-rand.workspace = true
-jsonwebtoken.workspace = true
 serde.workspace = true
-thiserror.workspace = true
+serde_with.workspace = true
 tokio = { workspace = true, features = ["sync", "macros"] }
 tokio-stream.workspace = true
 tokio-util.workspace = true
@@ -42,6 +38,7 @@ tracing-subscriber = { workspace = true, features = [
   "tracing-log",
 ] }
 tokio = { workspace = true, features = ["test-util", "macros"] }
+rand.workspace = true
 
 [lints]
 workspace = true

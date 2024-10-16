@@ -1,9 +1,9 @@
 use futures::prelude::*;
-use lumio_p2p::{libp2p::Multiaddr, Config, JwtSecret, Node};
+use lumio_p2p::{libp2p::pnet::PreSharedKey, libp2p::Multiaddr, Config, Node};
 use lumio_types::p2p::{PayloadStatus, SlotAttribute, SlotPayload, SlotPayloadWithEvents};
 
 async fn start_nodes() -> impl Iterator<Item = Node> {
-    let jwt = rand::random::<JwtSecret>();
+    let psk = PreSharedKey::new(rand::random());
 
     let bootstrap_addr = format!(
         "/ip4/127.0.0.1/tcp/{}",
@@ -20,7 +20,7 @@ async fn start_nodes() -> impl Iterator<Item = Node> {
                 Config {
                     listen_on: vec!["/ip4/127.0.0.1/tcp/0".parse().unwrap()],
                     bootstrap_addresses: vec![bootstrap_addr.clone()],
-                    jwt: jwt.clone(),
+                    psk,
                 },
             )
             .unwrap();
@@ -36,7 +36,7 @@ async fn start_nodes() -> impl Iterator<Item = Node> {
             Config {
                 listen_on: vec![bootstrap_addr],
                 bootstrap_addresses: vec![],
-                jwt,
+                psk,
             },
         )
         .unwrap();
@@ -53,11 +53,10 @@ async fn simple() {
     super::init();
 
     let nodes = start_nodes().await.take(2).collect::<Vec<_>>();
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     let mut op_sol_events = nodes[0].subscribe_lumio_op_sol_events().await.unwrap();
 
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     nodes[1]
         .send_lumio_op_sol(SlotAttribute::new(
@@ -83,16 +82,13 @@ async fn many_nodes() {
     super::init();
 
     let nodes = start_nodes().await.take(5).collect::<Vec<_>>();
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     let streams = futures::stream::iter(nodes[1..].iter())
-        .then(|n| async {
-            let s = n.subscribe_lumio_op_sol_events().await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            s
-        })
-        .collect::<Vec<_>>()
-        .await;
+        .then(|n| n.subscribe_lumio_op_sol_events())
+        .try_collect::<Vec<_>>()
+        .await
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
     nodes[0]
         .send_lumio_op_sol(SlotAttribute::new(
@@ -120,12 +116,13 @@ async fn sub_since() {
     super::init();
 
     let nodes = start_nodes().await.take(2).collect::<Vec<_>>();
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     let mut op_sol_subs = nodes[0].handle_op_sol_since().await.unwrap();
+    // For subsription propagation
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     let mut op_sol_events = nodes[1].subscribe_op_sol_events_since(10).await.unwrap();
+    // For subsription propagation
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     let (slot, mut sink) = op_sol_subs.next().await.unwrap();
@@ -154,16 +151,17 @@ async fn sub_lumio_since() {
     super::init();
 
     let nodes = start_nodes().await.take(2).collect::<Vec<_>>();
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     let mut lumio_sol_subs = nodes[0].handle_lumio_sol_since().await.unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    // For subsription propagation
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
     let mut lumio_sol_events = nodes[1]
         .subscribe_lumio_op_sol_events_since(10)
         .await
         .unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    // For subsription propagation
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
     let (slot, mut sink) = lumio_sol_subs.next().await.unwrap();
     assert_eq!(slot, 10);
