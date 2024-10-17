@@ -20,10 +20,11 @@ use topics::Topic;
 pub use libp2p;
 
 pub mod node_runner;
+pub mod simple_client;
 
 // We create a custom network behaviour that combines Gossipsub and Mdns.
 #[derive(libp2p::swarm::NetworkBehaviour)]
-struct LumioBehaviour {
+pub struct LumioBehaviour {
     gossipsub: gossipsub::Behaviour,
 }
 
@@ -384,24 +385,24 @@ impl Node {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub(crate) enum LumioCommand {
+pub enum LumioCommand {
     SolSubscribeSince(topics::LumioSolEventsSince),
     MoveSubscribeSince(topics::LumioMoveEventsSince),
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub(crate) enum SolCommand {
+pub enum SolCommand {
     SubEventsSince(topics::SolEventsSince),
     EngineSince(topics::SolEngineSince),
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub(crate) enum MoveCommand {
+pub enum MoveCommand {
     SubEventsSince(topics::MoveEventsSince),
     EngineSince(topics::MoveEngineSince),
 }
 
-pub(crate) mod topics {
+pub mod topics {
     use libp2p::gossipsub::{IdentTopic, TopicHash};
     use lumio_types::events::l2::EngineActions;
     use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
@@ -409,7 +410,7 @@ pub(crate) mod topics {
 
     use std::sync::LazyLock;
 
-    pub(crate) trait Topic {
+    pub trait Topic {
         type Msg: serde::Serialize + serde::de::DeserializeOwned;
 
         fn topic(&self) -> IdentTopic;
@@ -422,7 +423,7 @@ pub(crate) mod topics {
     macro_rules! topic {
         ( $(struct $name:ident <$msg:ty> ($topic:literal) ;)* ) => {$(
             #[derive(Clone, Copy, Debug, Default)]
-            pub(crate) struct $name;
+            pub struct $name;
 
             impl Topic for $name {
                 type Msg = $msg;
