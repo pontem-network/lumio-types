@@ -2,8 +2,8 @@
 
 use eyre::{Result, WrapErr};
 use futures::prelude::*;
+use libp2p::gossipsub;
 use libp2p::multiaddr::Multiaddr;
-use libp2p::{gossipsub, mdns};
 use lumio_types::events::l2::EngineActions;
 use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
 use lumio_types::Slot;
@@ -15,24 +15,23 @@ use std::time::Duration;
 use node_runner::NodeRunner;
 use topics::Topic;
 
-pub use jwt::JwtSecret;
 pub use libp2p;
 
-mod jwt;
 pub mod node_runner;
 
 // We create a custom network behaviour that combines Gossipsub and Mdns.
 #[derive(libp2p::swarm::NetworkBehaviour)]
 struct LumioBehaviour {
     gossipsub: gossipsub::Behaviour,
-    mdns: mdns::tokio::Behaviour,
 }
 
+#[serde_with::serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub listen_on: Vec<Multiaddr>,
     pub bootstrap_addresses: Vec<Multiaddr>,
-    pub jwt: JwtSecret,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    pub psk: libp2p::pnet::PreSharedKey,
 }
 
 enum SubscribeCommand {
@@ -133,7 +132,7 @@ enum Command {
 
 #[derive(Debug, Clone)]
 pub struct Node {
-    cmd_sender: tokio::sync::mpsc::Sender<Command>,
+    cmd_sender: tokio::sync::mpsc::Sender<(Command, tokio::sync::oneshot::Sender<()>)>,
 }
 
 impl Node {
@@ -141,14 +140,25 @@ impl Node {
         keypair: libp2p::identity::Keypair,
         cfg: Config,
     ) -> eyre::Result<(Self, NodeRunner)> {
+        let Config {
+            listen_on,
+            bootstrap_addresses,
+            psk,
+        } = cfg;
+
         let mut swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
             .with_tokio()
-            .with_tcp(
-                libp2p::tcp::Config::default(),
-                libp2p::noise::Config::new,
-                libp2p::yamux::Config::default,
-            )?
-            .with_quic()
+            .with_other_transport(|key| {
+                use libp2p::Transport;
+
+                libp2p::tcp::tokio::Transport::new(libp2p::tcp::Config::default().nodelay(true))
+                    .and_then(move |socket, _| libp2p::pnet::PnetConfig::new(psk).handshake(socket))
+                    .upgrade(libp2p::core::transport::upgrade::Version::V1Lazy)
+                    .authenticate(
+                        libp2p::noise::Config::new(key).expect("Failed to make noise config"),
+                    )
+                    .multiplex(libp2p::yamux::Config::default())
+            })?
             .with_behaviour(|key| {
                 // To content-address message, we can take the hash of message and use it as an ID.
                 let message_id_fn = |message: &gossipsub::Message| {
@@ -170,20 +180,10 @@ impl Node {
                     gossipsub_config,
                 )?;
 
-                let mdns = mdns::tokio::Behaviour::new(
-                    mdns::Config::default(),
-                    key.public().to_peer_id(),
-                )?;
-                Ok(LumioBehaviour { gossipsub, mdns })
+                Ok(LumioBehaviour { gossipsub })
             })?
             .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
             .build();
-
-        let Config {
-            listen_on,
-            bootstrap_addresses,
-            jwt,
-        } = cfg;
 
         for a in listen_on {
             swarm.listen_on(a).context("Failed to listen on address")?;
@@ -192,30 +192,37 @@ impl Node {
             swarm.dial(a).context("Failed to dial address")?;
         }
 
-        swarm
-            .behaviour_mut()
-            .gossipsub
-            .subscribe(&topics::Auth.topic())?;
-
-        match swarm
-            .behaviour_mut()
-            .gossipsub
-            .publish(topics::Auth.topic().clone(), jwt.claim()?)
-        {
-            Ok(_) => tracing::debug!("Send auth message"),
-            // We don't care if there no peers at this stage. We'll auth once someone subscribes
-            Err(gossipsub::PublishError::InsufficientPeers) => tracing::warn!("No peers for auth"),
-            Err(err) => return Err(err).context("Failed to auth"),
-        }
-        let (node_runner, cmd_sender) = NodeRunner::new(swarm, jwt);
+        let (node_runner, cmd_sender) = NodeRunner::new(swarm);
         Ok((Self { cmd_sender }, node_runner))
     }
 
-    async fn subscribe_event(&self, cmd: SubscribeCommand) -> Result<()> {
+    async fn send_cmd_and_wait_completion(&self, cmd: Command) -> Result<()> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
         self.cmd_sender
-            .send(Command::Subscribe(cmd))
+            .send((cmd, sender))
             .await
-            .context("Node runner is probably dead")
+            .context("Node runner is probably dead")?;
+        if receiver.await.is_err() {
+            return Err(eyre::eyre!("Node runner is probably dead"));
+        }
+
+        Ok(())
+    }
+
+    async fn subscribe_event(&self, cmd: SubscribeCommand) -> Result<()> {
+        self.send_cmd_and_wait_completion(Command::Subscribe(cmd))
+            .await
+            .context("Failed to subscribe")
+    }
+
+    async fn send_event(&self, topic: impl Topic, event: impl serde::Serialize) -> Result<()> {
+        tracing::debug!(topic = %topic.topic(), "Sending event");
+        self.send_cmd_and_wait_completion(Command::SendEvent(
+            topic.topic(),
+            bincode::serialize(&event).unwrap(),
+        ))
+        .await
+        .context("Failed to send event")
     }
 
     pub async fn handle_op_move_since(
@@ -394,18 +401,6 @@ impl Node {
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
-    async fn send_event(&self, topic: impl Topic, event: impl serde::Serialize) -> Result<()> {
-        tracing::debug!(topic = %topic.topic(), "Sending event");
-        self.cmd_sender
-            .send(Command::SendEvent(
-                topic.topic(),
-                bincode::serialize(&event).unwrap(),
-            ))
-            .await
-            .context("Node runner is probably dead")?;
-        Ok(())
-    }
-
     pub async fn send_lumio_op_move(&self, events: SlotAttribute) -> Result<()> {
         self.send_event(topics::LumioMoveEvents, events).await
     }
@@ -421,12 +416,6 @@ impl Node {
     pub async fn send_op_move(&self, artifacts: SlotPayloadWithEvents) -> Result<()> {
         self.send_event(topics::MoveEvents, artifacts).await
     }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub(crate) struct Auth {
-    peer_id: libp2p::PeerId,
-    claim: String,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -485,7 +474,6 @@ pub(crate) mod topics {
     }
 
     topic! {
-        struct Auth<crate::Auth>("auth");
         struct MoveEvents<SlotPayloadWithEvents>("move/events");
         struct SolEvents<SlotPayloadWithEvents>("sol/events");
         struct LumioSolEvents<SlotAttribute>("lumio/sol/events");
