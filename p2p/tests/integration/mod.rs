@@ -118,11 +118,11 @@ async fn sub_since() {
     let nodes = start_nodes().await.take(2).collect::<Vec<_>>();
 
     let mut op_sol_subs = nodes[0].handle_op_sol_since().await.unwrap();
-    // For subsription propagation
+    // For subscription propagation
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     let mut op_sol_events = nodes[1].subscribe_op_sol_events_since(10).await.unwrap();
-    // For subsription propagation
+    // For subscription propagation
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     let (slot, mut sink) = op_sol_subs.next().await.unwrap();
@@ -153,14 +153,14 @@ async fn sub_lumio_since() {
     let nodes = start_nodes().await.take(2).collect::<Vec<_>>();
 
     let mut lumio_sol_subs = nodes[0].handle_lumio_sol_since().await.unwrap();
-    // For subsription propagation
+    // For subscription propagation
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
     let mut lumio_sol_events = nodes[1]
         .subscribe_lumio_op_sol_events_since(10)
         .await
         .unwrap();
-    // For subsription propagation
+    // For subscription propagation
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
     let (slot, mut sink) = lumio_sol_subs.next().await.unwrap();
