@@ -42,11 +42,6 @@ pub struct NodeRunner {
     // For tasks
     cmd_sender: tokio::sync::mpsc::Sender<(Command, tokio::sync::oneshot::Sender<()>)>,
 
-    op_move_events: Option<tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
-    op_sol_events: Option<tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
-    lumio_sol_events: Option<tokio::sync::mpsc::Sender<SlotAttribute>>,
-    lumio_move_events: Option<tokio::sync::mpsc::Sender<SlotAttribute>>,
-
     op_move_events_since_subs: HashMap<TopicHash, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
     op_move_engine_since_subs: HashMap<TopicHash, tokio::sync::mpsc::Sender<EngineActions>>,
     op_sol_events_since_subs: HashMap<TopicHash, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>>,
@@ -66,38 +61,6 @@ pub struct NodeRunner {
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotAttribute>)>>,
     lumio_sol_events_since_handler:
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotAttribute>)>>,
-}
-
-macro_rules! impl_handle_channel {
-    ($node_runner:ty {
-        $($topic:ty => $field:ident),* $(,)?
-    }) => {$(
-        impl HandleMsg<$topic> for $node_runner {
-            async fn handle_msg(
-                &mut self,
-                msg: <$topic as topics::Topic>::Msg,
-                _: &gossipsub::Message,
-            ) -> Result<()> {
-                // TODO: unsub if noone listens
-                let _ = self
-                    . $field
-                    .as_ref()
-                    .expect("We should always have a channel if we subscribed to topic")
-                    .send(msg)
-                    .await;
-                Ok(())
-            }
-        }
-    )*}
-}
-
-impl_handle_channel! {
-    NodeRunner {
-        topics::MoveEvents => op_move_events,
-        topics::SolEvents => op_sol_events,
-        topics::LumioSolEvents => lumio_sol_events,
-        topics::LumioMoveEvents => lumio_move_events,
-    }
 }
 
 impl HandleMsg<topics::MoveCommands> for NodeRunner {
@@ -350,10 +313,6 @@ impl NodeRunner {
             cmd_receiver,
             cmd_sender: cmd_sender.clone(),
 
-            op_move_events: None,
-            op_sol_events: None,
-            lumio_sol_events: None,
-            lumio_move_events: None,
             op_move_events_since_subs: Default::default(),
             op_move_engine_since_subs: Default::default(),
             op_sol_events_since_subs: Default::default(),
@@ -427,10 +386,6 @@ impl NodeRunner {
             .subscribe(&cmd.topic())
             .expect("Something went terribly wrong, as we failed to subscribe to some topic");
         match cmd {
-            SubscribeCommand::Move(sender) => self.op_move_events = Some(sender),
-            SubscribeCommand::Sol(sender) => self.op_sol_events = Some(sender),
-            SubscribeCommand::LumioSol(sender) => self.lumio_sol_events = Some(sender),
-            SubscribeCommand::LumioMove(sender) => self.lumio_move_events = Some(sender),
             SubscribeCommand::MoveSinceHandler(sender) => {
                 self.op_move_events_since_handler = Some(sender)
             }
@@ -529,17 +484,13 @@ impl NodeRunner {
 
         run_topics! {
             LumioCommands,
-            LumioMoveEvents,
             LumioMoveEventsSince,
-            LumioSolEvents,
             LumioSolEventsSince,
             MoveCommands,
             MoveEngineSince,
-            MoveEvents,
             MoveEventsSince,
             SolCommands,
             SolEngineSince,
-            SolEvents,
             SolEventsSince,
         };
 

@@ -1,6 +1,6 @@
 use futures::prelude::*;
 use lumio_p2p::{libp2p::pnet::PreSharedKey, libp2p::Multiaddr, Config, Node};
-use lumio_types::p2p::{PayloadStatus, SlotAttribute, SlotPayload, SlotPayloadWithEvents};
+use lumio_types::p2p::{SlotAttribute, SlotPayload, SlotPayloadWithEvents};
 
 async fn start_nodes() -> impl Iterator<Item = Node> {
     let psk = PreSharedKey::new(rand::random());
@@ -46,69 +46,6 @@ async fn start_nodes() -> impl Iterator<Item = Node> {
         node
     })
     .chain(rest)
-}
-
-#[tokio::test]
-async fn simple() {
-    super::init();
-
-    let nodes = start_nodes().await.take(2).collect::<Vec<_>>();
-
-    let mut op_sol_events = nodes[0].subscribe_lumio_op_sol_events().await.unwrap();
-
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-    nodes[1]
-        .send_lumio_op_sol(SlotAttribute::new(
-            1,
-            vec![],
-            Some((0, PayloadStatus::Pending)),
-        ))
-        .await
-        .unwrap();
-
-    assert_eq!(
-        op_sol_events.next().await,
-        Some(SlotAttribute::new(
-            1,
-            vec![],
-            Some((0, PayloadStatus::Pending)),
-        ))
-    );
-}
-
-#[tokio::test]
-async fn many_nodes() {
-    super::init();
-
-    let nodes = start_nodes().await.take(5).collect::<Vec<_>>();
-
-    let streams = futures::stream::iter(nodes[1..].iter())
-        .then(|n| n.subscribe_lumio_op_sol_events())
-        .try_collect::<Vec<_>>()
-        .await
-        .unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-
-    nodes[0]
-        .send_lumio_op_sol(SlotAttribute::new(
-            1,
-            vec![],
-            Some((0, PayloadStatus::Pending)),
-        ))
-        .await
-        .unwrap();
-
-    for mut s in streams {
-        assert_eq!(
-            s.next().await,
-            Some(SlotAttribute::new(
-                1,
-                vec![],
-                Some((0, PayloadStatus::Pending)),
-            ))
-        );
-    }
 }
 
 #[tokio::test]
