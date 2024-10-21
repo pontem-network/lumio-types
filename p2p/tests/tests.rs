@@ -1,5 +1,6 @@
 #![allow(unused_crate_dependencies)]
 mod integration;
+mod simple_client;
 
 pub fn init() {
     let _ = tracing_subscriber::fmt()
