@@ -39,8 +39,6 @@ pub struct Config {
 
 enum SubscribeCommand {
     /// Events from op-move to lumio
-    Move(tokio::sync::mpsc::Sender<SlotPayloadWithEvents>),
-    /// Events from op-move to lumio
     MoveSince {
         since: Slot,
         sender: tokio::sync::mpsc::Sender<SlotPayloadWithEvents>,
@@ -50,8 +48,6 @@ enum SubscribeCommand {
         since: Slot,
         sender: tokio::sync::mpsc::Sender<EngineActions>,
     },
-    /// Events from op-sol to lumio
-    Sol(tokio::sync::mpsc::Sender<SlotPayloadWithEvents>),
     /// Events from op-sol to lumio
     SolSince {
         since: Slot,
@@ -63,14 +59,10 @@ enum SubscribeCommand {
         sender: tokio::sync::mpsc::Sender<EngineActions>,
     },
     /// Events from lumio to op-sol
-    LumioSol(tokio::sync::mpsc::Sender<SlotAttribute>),
-    /// Events from lumio to op-sol
     LumioSolSince {
         since: Slot,
         sender: tokio::sync::mpsc::Sender<SlotAttribute>,
     },
-    /// Events from lumio to op-move
-    LumioMove(tokio::sync::mpsc::Sender<SlotAttribute>),
     /// Events from lumio to op-move
     LumioMoveSince {
         since: Slot,
@@ -105,16 +97,12 @@ enum SubscribeCommand {
 impl SubscribeCommand {
     pub fn topic(&self) -> gossipsub::IdentTopic {
         match self {
-            Self::Move(_) => topics::MoveEvents.topic(),
             Self::MoveSince { since, .. } => topics::MoveEventsSince(*since).topic(),
             Self::MoveEngineSince { since, .. } => topics::MoveEngineSince(*since).topic(),
-            Self::Sol(_) => topics::SolEvents.topic(),
             Self::SolSince { since, .. } => topics::SolEventsSince(*since).topic(),
             Self::SolEngineSince { since, .. } => topics::SolEngineSince(*since).topic(),
             Self::LumioSolSince { since, .. } => topics::LumioSolEventsSince(*since).topic(),
             Self::LumioMoveSince { since, .. } => topics::LumioMoveEventsSince(*since).topic(),
-            Self::LumioSol(_) => topics::LumioSolEvents.topic(),
-            Self::LumioMove(_) => topics::LumioMoveEvents.topic(),
             Self::MoveSinceHandler(_) | Self::MoveEngineSinceHandler(_) => {
                 topics::MoveCommands.topic()
             }
@@ -179,16 +167,6 @@ impl Node {
         self.send_cmd_and_wait_completion(Command::Subscribe(cmd))
             .await
             .context("Failed to subscribe")
-    }
-
-    async fn send_event(&self, topic: impl Topic, event: impl serde::Serialize) -> Result<()> {
-        tracing::debug!(topic = %topic.topic(), "Sending event");
-        self.send_cmd_and_wait_completion(Command::SendEvent(
-            topic.topic(),
-            bincode::serialize(&event).unwrap(),
-        ))
-        .await
-        .context("Failed to send event")
     }
 
     pub async fn handle_op_move_since(
@@ -263,22 +241,6 @@ impl Node {
             .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
     }
 
-    pub async fn subscribe_op_move_events(
-        &self,
-    ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
-        let (sender, receiver) = tokio::sync::mpsc::channel(10);
-        self.subscribe_event(SubscribeCommand::Move(sender)).await?;
-        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
-    }
-
-    pub async fn subscribe_op_sol_events(
-        &self,
-    ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
-        let (sender, receiver) = tokio::sync::mpsc::channel(10);
-        self.subscribe_event(SubscribeCommand::Sol(sender)).await?;
-        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
-    }
-
     pub async fn subscribe_op_move_events_since(
         &self,
         since: Slot,
@@ -309,30 +271,12 @@ impl Node {
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
 
-    pub async fn subscribe_lumio_op_sol_events(
-        &self,
-    ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
-        let (sender, receiver) = tokio::sync::mpsc::channel(20);
-        self.subscribe_event(SubscribeCommand::LumioSol(sender))
-            .await?;
-        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
-    }
-
     pub async fn subscribe_lumio_op_sol_events_since(
         &self,
         since: Slot,
     ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
         self.subscribe_event(SubscribeCommand::LumioSolSince { since, sender })
-            .await?;
-        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
-    }
-
-    pub async fn subscribe_lumio_op_move_events(
-        &self,
-    ) -> Result<impl Stream<Item = SlotAttribute> + Unpin + 'static> {
-        let (sender, receiver) = tokio::sync::mpsc::channel(20);
-        self.subscribe_event(SubscribeCommand::LumioMove(sender))
             .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
     }
@@ -365,22 +309,6 @@ impl Node {
         self.subscribe_event(SubscribeCommand::SolEngineSince { since, sender })
             .await?;
         Ok(tokio_stream::wrappers::ReceiverStream::new(receiver))
-    }
-
-    pub async fn send_lumio_op_move(&self, events: SlotAttribute) -> Result<()> {
-        self.send_event(topics::LumioMoveEvents, events).await
-    }
-
-    pub async fn send_lumio_op_sol(&self, events: SlotAttribute) -> Result<()> {
-        self.send_event(topics::LumioSolEvents, events).await
-    }
-
-    pub async fn send_op_sol(&self, artifacts: SlotPayloadWithEvents) -> Result<()> {
-        self.send_event(topics::SolEvents, artifacts).await
-    }
-
-    pub async fn send_op_move(&self, artifacts: SlotPayloadWithEvents) -> Result<()> {
-        self.send_event(topics::MoveEvents, artifacts).await
     }
 }
 
@@ -440,11 +368,6 @@ pub mod topics {
     }
 
     topic! {
-        struct MoveEvents<SlotPayloadWithEvents>("move/events");
-        struct SolEvents<SlotPayloadWithEvents>("sol/events");
-        struct LumioSolEvents<SlotAttribute>("lumio/sol/events");
-        struct LumioMoveEvents<SlotAttribute>("lumio/move/events");
-
         struct LumioCommands<crate::LumioCommand>("lumio/cmds");
         struct SolCommands<crate::SolCommand>("sol/cmds");
         struct MoveCommands<crate::MoveCommand>("move/cmds");
