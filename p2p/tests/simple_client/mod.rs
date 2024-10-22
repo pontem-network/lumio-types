@@ -167,13 +167,31 @@ async fn test_client_sinc() {
         // .await
         // .unwrap();
 
+        // client
+        //     .publish(
+        //         topics::SolCommands.topic(),
+        //         EngineActions {
+        //             last_slot: 0,
+        //             slot: 0,
+        //             actions: Vec::new(),
+        //         },
+        //     )
+        //     .await
+        //     .unwrap();
         client
             .publish(
                 topics::SolCommands.topic(),
-                EngineActions {
-                    last_slot: 0,
-                    slot: 0,
-                    actions: Vec::new(),
+                SlotPayloadWithEvents {
+                    events: Vec::new(),
+                    payload: SlotPayload {
+                        block_height: None,
+                        block_time: None,
+                        blockhash: Default::default(),
+                        previous_blockhash: Default::default(),
+                        slot: 0,
+                        txs: Vec::new(),
+                        bank_hash: Default::default(),
+                    },
                 },
             )
             .await
