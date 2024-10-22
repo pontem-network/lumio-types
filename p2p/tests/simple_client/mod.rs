@@ -1,13 +1,17 @@
 use std::time::Duration;
 
-use futures::future::try_join_all;
+use eyre::eyre;
+use futures::{future::try_join_all, SinkExt};
 use libp2p::{pnet::PreSharedKey, Multiaddr, PeerId};
 use lumio_p2p::{
     simple_client::P2PClient,
     topics::{self, Topic},
     Config, Node,
 };
-use lumio_types::p2p::{PayloadStatus, SlotAttribute};
+use lumio_types::{
+    events::l2::EngineActions,
+    p2p::{PayloadStatus, SlotAttribute},
+};
 use tokio_stream::StreamExt;
 
 fn free_address() -> Multiaddr {
@@ -118,4 +122,108 @@ async fn test_client() {
         let ev = n.next().await.unwrap();
         assert_eq!(99, ev.slot_id);
     }
+}
+
+#[tokio::test]
+async fn test_client_sinc() {
+    super::init();
+
+    let psk = PreSharedKey::new(rand::random());
+    let (peer_ids, addresses, nodes) = start_nodes(psk, 4).await;
+    let node_count = peer_ids.len();
+
+    // Create a client and wait for all the peers to connect
+
+    let mut client = P2PClient::new([free_address()], addresses.clone(), psk)
+        .await
+        .unwrap();
+
+    let auth_count = client.wait_peers_count(node_count).await.unwrap();
+    assert_eq!(node_count, auth_count);
+
+    client.wait_peers(&peer_ids).await.unwrap();
+
+    // = = =
+    // Receiving messages using the client
+    // = = =
+
+    client.subscribe(topics::SolCommands.topic()).await.unwrap();
+
+    tokio::spawn(async move {
+        for _ in 0..10 {
+            client
+                .publish(
+                    topics::SolCommands.topic(),
+                    EngineActions {
+                        last_slot: 0,
+                        slot: 0,
+                        actions: Vec::new(),
+                    },
+                )
+                .await
+                .unwrap();
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    });
+
+    // Nodes need time to process the subscription and start sending messages.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    for (n, nd) in nodes.iter().enumerate() {
+        let n = n as u64;
+        dbg!(&"EngineActions 0");
+
+        let mut t = nd.handle_op_sol_engine_since().await.unwrap();
+        let (d, mut r) = t.next().await.unwrap();
+        dbg!("EngineActions 1");
+        r.send(EngineActions {
+            last_slot: 0,
+            slot: 0,
+            actions: Vec::new(),
+        })
+        .await
+        .map_err(|_| eyre!("@todo"))
+        .unwrap();
+        dbg!("EngineActions 2");
+        // let t = nd
+        //     .subscribe_lumio_op_sol_events()
+        //     .await.unwrap().next().await
+        // nd.send_lumio_op_sol(SlotAttribute::new(
+        //     n + 1,
+        //     vec![],
+        //     Some((n, PayloadStatus::Pending)),
+        // ))
+        // .await
+        // .unwrap();
+    }
+
+    // for _ in 0..nodes.len() {
+    //     let m: SlotAttribute = client.next_message_with_decode().await.unwrap();
+    //     (1..=node_count).contains(&(m.slot_id as usize));
+    // }
+
+    // // = = =
+    // // Sending messages using the client
+    // // = = =
+    // let node_sub = try_join_all(nodes.iter().map(|n| n.subscribe_lumio_op_sol_events()))
+    //     .await
+    //     .unwrap();
+    // // Nodes need time to process the subscription and start sending messages.
+    // client
+    //     .wait_subscribe_peers(topics::LumioSolEvents.topic(), &peer_ids)
+    //     .await
+    //     .unwrap();
+
+    // client
+    //     .publish(
+    //         topics::LumioSolEvents.topic(),
+    //         SlotAttribute::new(99, vec![], None),
+    //     )
+    //     .await
+    //     .unwrap();
+
+    // for mut n in node_sub {
+    //     let ev = n.next().await.unwrap();
+    //     assert_eq!(99, ev.slot_id);
+    // }
 }
