@@ -10,7 +10,7 @@ use lumio_p2p::{
 };
 use lumio_types::{
     events::l2::EngineActions,
-    p2p::{PayloadStatus, SlotAttribute},
+    p2p::{PayloadStatus, SlotAttribute, SlotPayload, SlotPayloadWithEvents},
 };
 use tokio_stream::StreamExt;
 
@@ -129,7 +129,7 @@ async fn test_client_sinc() {
     super::init();
 
     let psk = PreSharedKey::new(rand::random());
-    let (peer_ids, addresses, nodes) = start_nodes(psk, 4).await;
+    let (peer_ids, addresses, mut nodes) = start_nodes(psk, 4).await;
     let node_count = peer_ids.len();
 
     // Create a client and wait for all the peers to connect
@@ -149,40 +149,63 @@ async fn test_client_sinc() {
 
     client.subscribe(topics::SolCommands.topic()).await.unwrap();
 
-    // tokio::spawn(async move {
-    //     for _ in 0..10 {
-    //         client
-    //             .publish(
-    //                 topics::SolCommands.topic(),
-    //                 EngineActions {
-    //                     last_slot: 0,
-    //                     slot: 0,
-    //                     actions: Vec::new(),
-    //                 },
-    //             )
-    //             .await
-    //             .unwrap();
-    //         tokio::time::sleep(Duration::from_millis(200)).await;
-    //     }
-    // });
+    let nd = nodes.remove(0);
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        // nd.send_op_sol(SlotPayloadWithEvents {
+        //     events: Vec::new(),
+        //     payload: SlotPayload {
+        //         block_height: None,
+        //         block_time: None,
+        //         blockhash: Default::default(),
+        //         previous_blockhash: Default::default(),
+        //         slot: 0,
+        //         txs: Vec::new(),
+        //         bank_hash: Default::default(),
+        //     },
+        // })
+        // .await
+        // .unwrap();
+        for _ in 0..10 {
+            client
+                .publish(
+                    topics::SolCommands.topic(),
+                    EngineActions {
+                        last_slot: 0,
+                        slot: 0,
+                        actions: Vec::new(),
+                    },
+                )
+                .await
+                .unwrap();
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    });
 
     // Nodes need time to process the subscription and start sending messages.
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    for (n, nd) in nodes.iter().enumerate() {
+    for (n, nd) in nodes.iter().take(1).enumerate() {
         // dbg!(&"EngineActions -2");
         // let m = nd.subscribe_op_sol_events_since(1).await.unwrap();
         // dbg!(&"EngineActions -1");
-        let n = n as u64;
         dbg!(&"EngineActions 0");
 
-        let mut t = nd.handle_op_sol_engine_since().await.unwrap();
+        let mut t = nd.handle_op_sol_since().await.unwrap();
         let (d, mut r) = t.next().await.unwrap();
         dbg!("EngineActions 1");
-        r.send(EngineActions {
-            last_slot: 0,
-            slot: 0,
-            actions: Vec::new(),
+
+        r.send(SlotPayloadWithEvents {
+            events: Vec::new(),
+            payload: SlotPayload {
+                block_height: None,
+                block_time: None,
+                blockhash: Default::default(),
+                previous_blockhash: Default::default(),
+                slot: 0,
+                txs: Vec::new(),
+                bank_hash: Default::default(),
+            },
         })
         .await
         .map_err(|_| eyre!("@todo"))
