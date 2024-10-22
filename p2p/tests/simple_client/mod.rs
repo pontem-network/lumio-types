@@ -149,27 +149,30 @@ async fn test_client_sinc() {
 
     client.subscribe(topics::SolCommands.topic()).await.unwrap();
 
-    tokio::spawn(async move {
-        for _ in 0..10 {
-            client
-                .publish(
-                    topics::SolCommands.topic(),
-                    EngineActions {
-                        last_slot: 0,
-                        slot: 0,
-                        actions: Vec::new(),
-                    },
-                )
-                .await
-                .unwrap();
-            tokio::time::sleep(Duration::from_millis(200)).await;
-        }
-    });
+    // tokio::spawn(async move {
+    //     for _ in 0..10 {
+    //         client
+    //             .publish(
+    //                 topics::SolCommands.topic(),
+    //                 EngineActions {
+    //                     last_slot: 0,
+    //                     slot: 0,
+    //                     actions: Vec::new(),
+    //                 },
+    //             )
+    //             .await
+    //             .unwrap();
+    //         tokio::time::sleep(Duration::from_millis(200)).await;
+    //     }
+    // });
 
     // Nodes need time to process the subscription and start sending messages.
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     for (n, nd) in nodes.iter().enumerate() {
+        // dbg!(&"EngineActions -2");
+        // let m = nd.subscribe_op_sol_events_since(1).await.unwrap();
+        // dbg!(&"EngineActions -1");
         let n = n as u64;
         dbg!(&"EngineActions 0");
 

@@ -232,11 +232,18 @@ impl Node {
     ) -> Result<
         impl Stream<Item = (Slot, impl Sink<EngineActions> + Unpin + 'static)> + Unpin + 'static,
     > {
+        dbg!(1);
         let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        dbg!(2);
         self.subscribe_event(SubscribeCommand::SolEngineSinceHandler(sender))
             .await?;
-        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver)
-            .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
+        dbg!(3);
+        Ok(
+            tokio_stream::wrappers::ReceiverStream::new(receiver).map(|(slot, sender)| {
+                dbg!(4);
+                (slot, tokio_util::sync::PollSender::new(sender))
+            }),
+        )
     }
 
     pub async fn handle_lumio_move_since(
