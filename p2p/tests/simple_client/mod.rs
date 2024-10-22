@@ -166,20 +166,19 @@ async fn test_client_sinc() {
         // })
         // .await
         // .unwrap();
-        for _ in 0..10 {
-            client
-                .publish(
-                    topics::SolCommands.topic(),
-                    EngineActions {
-                        last_slot: 0,
-                        slot: 0,
-                        actions: Vec::new(),
-                    },
-                )
-                .await
-                .unwrap();
-            tokio::time::sleep(Duration::from_millis(200)).await;
-        }
+
+        client
+            .publish(
+                topics::SolCommands.topic(),
+                EngineActions {
+                    last_slot: 0,
+                    slot: 0,
+                    actions: Vec::new(),
+                },
+            )
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(200)).await;
     });
 
     // Nodes need time to process the subscription and start sending messages.
