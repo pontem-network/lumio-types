@@ -318,7 +318,7 @@ pub enum LumioCommand {
     MoveSubscribeSince(topics::LumioMoveEventsSince),
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum SolCommand {
     SubEventsSince(topics::SolEventsSince),
     EngineSince(topics::SolEngineSince),

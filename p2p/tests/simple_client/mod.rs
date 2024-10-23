@@ -1,14 +1,16 @@
 use std::time::Duration;
 
-use futures::future::try_join_all;
+use eyre::eyre;
+use futures::{SinkExt, StreamExt};
 use libp2p::{pnet::PreSharedKey, Multiaddr, PeerId};
 use lumio_p2p::{
     simple_client::P2PClient,
     topics::{self, Topic},
-    Config, Node,
+    Config, Node, SolCommand,
 };
-use lumio_types::p2p::{PayloadStatus, SlotAttribute};
-use tokio_stream::StreamExt;
+use lumio_types::p2p::{SlotPayload, SlotPayloadWithEvents};
+use rand::random;
+use tokio::{join, time::sleep};
 
 fn free_address() -> Multiaddr {
     format!(
@@ -52,9 +54,23 @@ async fn start_nodes(psk: PreSharedKey, count: usize) -> (Vec<PeerId>, Vec<Multi
 async fn test_client() {
     super::init();
 
+    let mut payload = SlotPayloadWithEvents {
+        payload: SlotPayload {
+            slot: random(),
+            previous_blockhash: Default::default(),
+            blockhash: Default::default(),
+            bank_hash: Default::default(),
+            block_time: None,
+            block_height: None,
+            txs: vec![],
+        },
+        events: vec![],
+    };
+
+    let node_count = 4;
     let psk = PreSharedKey::new(rand::random());
-    let (peer_ids, addresses, nodes) = start_nodes(psk, 4).await;
-    let node_count = peer_ids.len();
+    let (peer_ids, addresses, mut nodes) = start_nodes(psk, node_count).await;
+    let main = nodes.remove(0);
 
     // Create a client and wait for all the peers to connect
 
@@ -62,60 +78,115 @@ async fn test_client() {
         .await
         .unwrap();
 
-    let auth_count = client.wait_peers_count(node_count).await.unwrap();
-    assert_eq!(node_count, auth_count);
+    assert_eq!(
+        node_count,
+        client.wait_peers_count(node_count).await.unwrap()
+    );
 
     client.wait_peers(&peer_ids).await.unwrap();
+
+    for node in nodes.iter() {
+        let start_slot = random();
+        join!(
+            async {
+                let (slot, mut stream) = main
+                    .handle_op_sol_since()
+                    .await
+                    .unwrap()
+                    .next()
+                    .await
+                    .unwrap();
+
+                assert_eq!(start_slot, slot);
+                stream
+                    .send(payload.clone())
+                    .await
+                    .map_err(|_| eyre!("Error sending"))
+                    .unwrap();
+            },
+            async {
+                sleep(Duration::from_millis(200)).await;
+
+                let item = node
+                    .subscribe_op_sol_events_since(start_slot)
+                    .await
+                    .unwrap()
+                    .next()
+                    .await
+                    .unwrap();
+                assert_eq!(item, payload);
+            }
+        );
+    }
+
+    let start_slot = random();
+    join!(
+        async {
+            let (slot, mut stream) = main
+                .handle_op_sol_since()
+                .await
+                .unwrap()
+                .next()
+                .await
+                .unwrap();
+
+            assert_eq!(start_slot, slot);
+            stream
+                .send(payload.clone())
+                .await
+                .map_err(|_| eyre!("Error sending"))
+                .unwrap();
+        },
+        async {
+            sleep(Duration::from_millis(200)).await;
+
+            client
+                .publish(
+                    topics::SolCommands.topic(),
+                    SolCommand::SubEventsSince(topics::SolEventsSince(start_slot)),
+                )
+                .await
+                .unwrap();
+            let topic = topics::SolEventsSince(start_slot).topic();
+            client.subscribe(topic.clone()).await.unwrap();
+
+            assert_eq!(payload, client.next_message_with_decode().await.unwrap());
+        }
+    );
 
     // = = =
     // Receiving messages using the client
     // = = =
+    let start_slot = random();
+    payload.payload.slot = random();
 
-    client
-        .subscribe(topics::LumioSolEvents.topic())
-        .await
-        .unwrap();
+    client.subscribe(topics::SolCommands.topic()).await.unwrap();
 
-    // Nodes need time to process the subscription and start sending messages.
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    join!(
+        async {
+            let SolCommand::SubEventsSince(topics::SolEventsSince(slot)) =
+                client.next_message_with_decode().await.unwrap()
+            else {
+                panic!("A subscription message was expected");
+            };
 
-    for (n, nd) in nodes.iter().enumerate() {
-        let n = n as u64;
-        nd.send_lumio_op_sol(SlotAttribute::new(
-            n + 1,
-            vec![],
-            Some((n, PayloadStatus::Pending)),
-        ))
-        .await
-        .unwrap();
-    }
+            assert_eq!(slot, start_slot);
 
-    for _ in 0..nodes.len() {
-        let m: SlotAttribute = client.next_message_with_decode().await.unwrap();
-        (1..=node_count).contains(&(m.slot_id as usize));
-    }
-    // = = =
-    // Sending messages using the client
-    // = = =
-    let node_sub = try_join_all(nodes.iter().map(|n| n.subscribe_lumio_op_sol_events()))
-        .await
-        .unwrap();
-    // Nodes need time to process the subscription and start sending messages.
-    client
-        .wait_subscribe_peers(topics::LumioSolEvents.topic(), &peer_ids)
-        .await
-        .unwrap();
-
-    client
-        .publish(
-            topics::LumioSolEvents.topic(),
-            SlotAttribute::new(99, vec![], None),
-        )
-        .await
-        .unwrap();
-
-    for mut n in node_sub {
-        let ev = n.next().await.unwrap();
-        assert_eq!(99, ev.slot_id);
-    }
+            client
+                .publish(topics::SolEventsSince(start_slot).topic(), payload.clone())
+                .await
+                .unwrap();
+        },
+        async {
+            sleep(Duration::from_millis(200)).await;
+            let item = main
+                .subscribe_op_sol_events_since(start_slot)
+                .await
+                .unwrap()
+                .next()
+                .await
+                .unwrap();
+            assert_eq!(item, payload);
+        }
+    );
 }
