@@ -17,20 +17,11 @@ pub struct SlotPayloadWithEvents {
 pub struct SlotAttribute {
     pub slot_id: Slot,
     pub events: Vec<L1Event>,
-    pub sync_status: Option<(Slot, PayloadStatus)>,
 }
 
 impl SlotAttribute {
-    pub fn new(
-        slot_id: Slot,
-        events: Vec<L1Event>,
-        sync_status: Option<(Slot, PayloadStatus)>,
-    ) -> Self {
-        Self {
-            slot_id,
-            events,
-            sync_status,
-        }
+    pub fn new(slot_id: Slot, events: Vec<L1Event>) -> Self {
+        Self { slot_id, events }
     }
 
     pub fn id(&self) -> Slot {
@@ -38,7 +29,7 @@ impl SlotAttribute {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.events.is_empty() && self.sync_status.is_none()
+        self.events.is_empty()
     }
 }
 

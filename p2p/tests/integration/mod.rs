@@ -116,7 +116,6 @@ async fn sub_lumio_since() {
     let payload = SlotAttribute {
         slot_id: 14,
         events: vec![],
-        sync_status: None,
     };
 
     let mut nodes = start_nodes().await;
