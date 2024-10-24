@@ -24,8 +24,8 @@ use crate::{create_swarm_lumio, libp2p::Multiaddr, LumioBehaviour, LumioBehaviou
 pub struct P2PClient {
     _handler_message_service: tokio::task::JoinHandle<()>,
 
-    input_event: Receiver<SwarmEvent<LumioBehaviourEvent>>,
-    input_message: Receiver<GossipMessage>,
+    pub input_event: Receiver<SwarmEvent<LumioBehaviourEvent>>,
+    pub input_message: Receiver<GossipMessage>,
     swarm_sender: Sender<RequestSystem>,
 }
 
