@@ -14,8 +14,8 @@ use std::ops::ControlFlow;
 
 use crate::topics::Topic;
 use crate::{
-    topics, Command, LumioBehaviour, LumioBehaviourEvent, LumioCommand, MoveCommand, SolCommand,
-    SubscribeCommand,
+    topics, Command, Finalize, LumioBehaviour, LumioBehaviourEvent, LumioCommand, MoveCommand,
+    SolCommand, SubscribeCommand,
 };
 
 trait IsInterested<Msg> {
@@ -53,10 +53,12 @@ pub struct NodeRunner {
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>>,
     op_move_engine_since_handler:
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<EngineActions>)>>,
+    op_move_finalize_handler: Option<tokio::sync::mpsc::Sender<Finalize>>,
     op_sol_events_since_handler:
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>>,
     op_sol_engine_since_handler:
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<EngineActions>)>>,
+    op_sol_finalize_handler: Option<tokio::sync::mpsc::Sender<Finalize>>,
     lumio_move_events_since_handler:
         Option<tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotAttribute>)>>,
     lumio_sol_events_since_handler:
@@ -276,6 +278,30 @@ impl HandleMsg<topics::SolEventsSince> for NodeRunner {
     }
 }
 
+impl HandleMsg<topics::SolFinalize> for NodeRunner {
+    async fn handle_msg(&mut self, msg: Finalize, _: &gossipsub::Message) -> Result<()> {
+        let _ = self
+            .op_sol_finalize_handler
+            .as_ref()
+            .unwrap()
+            .send(msg)
+            .await;
+        Ok(())
+    }
+}
+
+impl HandleMsg<topics::MoveFinalize> for NodeRunner {
+    async fn handle_msg(&mut self, msg: Finalize, _: &gossipsub::Message) -> Result<()> {
+        let _ = self
+            .op_move_finalize_handler
+            .as_ref()
+            .unwrap()
+            .send(msg)
+            .await;
+        Ok(())
+    }
+}
+
 impl NodeRunner {
     fn spawn_sending_messages_from_receiver(
         &self,
@@ -319,8 +345,10 @@ impl NodeRunner {
             op_sol_engine_since_subs: Default::default(),
             op_move_events_since_handler: None,
             op_move_engine_since_handler: None,
+            op_move_finalize_handler: None,
             op_sol_events_since_handler: None,
             op_sol_engine_since_handler: None,
+            op_sol_finalize_handler: None,
             lumio_move_events_since_handler: None,
             lumio_sol_events_since_handler: None,
             lumio_move_events_since_subs: Default::default(),
@@ -392,11 +420,17 @@ impl NodeRunner {
             SubscribeCommand::MoveEngineSinceHandler(sender) => {
                 self.op_move_engine_since_handler = Some(sender)
             }
+            SubscribeCommand::MoveFinalizeHandler(sender) => {
+                self.op_move_finalize_handler = Some(sender)
+            }
             SubscribeCommand::SolSinceHandler(sender) => {
                 self.op_sol_events_since_handler = Some(sender)
             }
             SubscribeCommand::SolEngineSinceHandler(sender) => {
                 self.op_sol_engine_since_handler = Some(sender)
+            }
+            SubscribeCommand::SolFinalizeHandler(sender) => {
+                self.op_sol_finalize_handler = Some(sender)
             }
             SubscribeCommand::MoveSince { sender, since } => {
                 self.op_move_events_since_subs
@@ -489,9 +523,11 @@ impl NodeRunner {
             MoveCommands,
             MoveEngineSince,
             MoveEventsSince,
+            MoveFinalize,
             SolCommands,
             SolEngineSince,
             SolEventsSince,
+            SolFinalize,
         };
 
         tracing::debug!(topic = ?msg.topic, "Ignoring message from unknown topic");

@@ -7,7 +7,7 @@ use libp2p::multiaddr::Multiaddr;
 use libp2p::pnet::PreSharedKey;
 use libp2p::{gossipsub, Swarm};
 use lumio_types::events::l2::EngineActions;
-use lumio_types::p2p::{SlotAttribute, SlotPayloadWithEvents};
+use lumio_types::p2p::{PayloadStatus, SlotAttribute, SlotPayloadWithEvents};
 use lumio_types::Slot;
 use serde::{Deserialize, Serialize};
 
@@ -76,6 +76,8 @@ enum SubscribeCommand {
     MoveEngineSinceHandler(
         tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<EngineActions>)>,
     ),
+    /// Subscribe to finalization of payloads on move
+    MoveFinalizeHandler(tokio::sync::mpsc::Sender<Finalize>),
     /// Give away streams from `SolSince` subscription
     SolSinceHandler(
         tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotPayloadWithEvents>)>,
@@ -84,6 +86,8 @@ enum SubscribeCommand {
     SolEngineSinceHandler(
         tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<EngineActions>)>,
     ),
+    /// Subscribe to finalization of payloads on sol
+    SolFinalizeHandler(tokio::sync::mpsc::Sender<Finalize>),
     /// Give away streams from `LumioSolSince` subscription
     LumioSolSinceHandler(
         tokio::sync::mpsc::Sender<(Slot, tokio::sync::mpsc::Sender<SlotAttribute>)>,
@@ -103,6 +107,8 @@ impl SubscribeCommand {
             Self::SolEngineSince { since, .. } => topics::SolEngineSince(*since).topic(),
             Self::LumioSolSince { since, .. } => topics::LumioSolEventsSince(*since).topic(),
             Self::LumioMoveSince { since, .. } => topics::LumioMoveEventsSince(*since).topic(),
+            Self::MoveFinalizeHandler(_) => topics::MoveFinalize.topic(),
+            Self::SolFinalizeHandler(_) => topics::SolFinalize.topic(),
             Self::MoveSinceHandler(_) | Self::MoveEngineSinceHandler(_) => {
                 topics::MoveCommands.topic()
             }
@@ -167,6 +173,45 @@ impl Node {
         self.send_cmd_and_wait_completion(Command::Subscribe(cmd))
             .await
             .context("Failed to subscribe")
+    }
+
+    async fn send_event<T: Topic>(&self, topic: &T, event: &T::Msg) -> Result<()> {
+        self.send_cmd_and_wait_completion(Command::SendEvent(
+            topic.topic(),
+            bincode::serialize(event).unwrap(),
+        ))
+        .await
+        .context("Failed to send event")
+    }
+
+    pub async fn op_sol_finalize(&self, slot: Slot, status: PayloadStatus) -> Result<()> {
+        self.send_event(&topics::SolFinalize, &Finalize { slot, status })
+            .await
+    }
+
+    pub async fn op_move_finalize(&self, slot: Slot, status: PayloadStatus) -> Result<()> {
+        self.send_event(&topics::MoveFinalize, &Finalize { slot, status })
+            .await
+    }
+
+    pub async fn handle_op_sol_finalize(
+        &self,
+    ) -> Result<impl Stream<Item = (Slot, PayloadStatus)> + Unpin + 'static> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::SolFinalizeHandler(sender))
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver)
+            .map(|Finalize { slot, status }| (slot, status)))
+    }
+
+    pub async fn handle_op_move_finalize(
+        &self,
+    ) -> Result<impl Stream<Item = (Slot, PayloadStatus)> + Unpin + 'static> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(10);
+        self.subscribe_event(SubscribeCommand::MoveFinalizeHandler(sender))
+            .await?;
+        Ok(tokio_stream::wrappers::ReceiverStream::new(receiver)
+            .map(|Finalize { slot, status }| (slot, status)))
     }
 
     pub async fn handle_op_move_since(
@@ -330,6 +375,12 @@ pub enum MoveCommand {
     EngineSince(topics::MoveEngineSince),
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Finalize {
+    pub slot: Slot,
+    pub status: lumio_types::p2p::PayloadStatus,
+}
+
 pub mod topics {
     use libp2p::gossipsub::{IdentTopic, TopicHash};
     use lumio_types::events::l2::EngineActions;
@@ -371,6 +422,9 @@ pub mod topics {
         struct LumioCommands<crate::LumioCommand>("lumio/cmds");
         struct SolCommands<crate::SolCommand>("sol/cmds");
         struct MoveCommands<crate::MoveCommand>("move/cmds");
+
+        struct SolFinalize<crate::Finalize>("sol/finalize");
+        struct MoveFinalize<crate::Finalize>("move/finalize");
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
