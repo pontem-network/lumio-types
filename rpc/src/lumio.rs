@@ -23,6 +23,7 @@ pub struct Lumio {
     since: Arc<std::sync::Mutex<Option<mpsc::Receiver<(Slot, mpsc::Sender<SlotAttribute>)>>>>,
     op_sol: url::Url,
     op_move: url::Url,
+    jwt: JwtSecret,
 }
 
 #[derive(Clone)]
@@ -65,6 +66,7 @@ impl Lumio {
             since: Arc::new(std::sync::Mutex::new(Some(since_receiver))),
             op_sol,
             op_move,
+            jwt,
         };
         (me, route)
     }
@@ -118,7 +120,7 @@ impl Lumio {
         let mut url = self.op_move.clone();
         url.set_path("/events");
         url.set_query(Some(&since.to_string()));
-        crate::utils::ws_subscribe(url)
+        crate::utils::ws_subscribe(url, self.jwt.claim()?)
             .await
             .context("Failed to subscribe to op-move events")
     }
@@ -130,7 +132,7 @@ impl Lumio {
         let mut url = self.op_sol.clone();
         url.set_path("/events");
         url.set_query(Some(&since.to_string()));
-        crate::utils::ws_subscribe(url)
+        crate::utils::ws_subscribe(url, self.jwt.claim()?)
             .await
             .context("Failed to subscribe to op-sol events")
     }

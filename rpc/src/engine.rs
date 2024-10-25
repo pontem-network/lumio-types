@@ -28,6 +28,7 @@ pub struct Engine {
     finalize: Arc<std::sync::Mutex<Option<mpsc::Receiver<(Slot, PayloadStatus)>>>>,
     lumio: url::Url,
     other_engine: url::Url,
+    jwt: JwtSecret,
 }
 
 #[derive(Clone)]
@@ -119,6 +120,7 @@ impl Engine {
             finalize: Arc::new(std::sync::Mutex::new(Some(finalize_receiver))),
             lumio,
             other_engine,
+            jwt,
         };
         (me, route)
     }
@@ -171,7 +173,7 @@ impl Engine {
         let mut url = self.other_engine.clone();
         url.set_path("/engine");
         url.set_query(Some(&since.to_string()));
-        crate::utils::ws_subscribe(url)
+        crate::utils::ws_subscribe(url, self.jwt.claim()?)
             .await
             .context("Failed to subscribe to op-move events")
     }
@@ -183,7 +185,7 @@ impl Engine {
         let mut url = self.lumio.clone();
         url.set_path("/events");
         url.set_query(Some(&since.to_string()));
-        crate::utils::ws_subscribe(url)
+        crate::utils::ws_subscribe(url, self.jwt.claim()?)
             .await
             .context("Failed to subscribe to op-move events")
     }

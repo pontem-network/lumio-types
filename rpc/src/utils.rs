@@ -17,9 +17,15 @@ pub async fn feed_receiver_to_socket(
 
 pub async fn ws_subscribe<T: serde::de::DeserializeOwned + 'static>(
     url: url::Url,
+    claims: String,
 ) -> Result<impl Stream<Item = Result<T>> + Unpin + 'static> {
-    // XXX: convert to string, as `url` crate version is not supported by tungstenite yet
-    let (stream, _) = tokio_tungstenite::connect_async(url.to_string())
+    let req = tungstenite::handshake::client::Request::builder()
+        .method("GET")
+        .header(reqwest::header::AUTHORIZATION, format!("Bearer {claims}"))
+        .uri(url.to_string())
+        .body(())
+        .unwrap();
+    let (stream, _) = tokio_tungstenite::connect_async(req)
         .await
         .context("Failed to connect to op-move")?;
 
