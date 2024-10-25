@@ -5,7 +5,7 @@ use futures::prelude::*;
 use lumio_types::p2p::{PayloadStatus, SlotAttribute, SlotPayloadWithEvents};
 use lumio_types::Slot;
 use poem::web::websocket::WebSocket;
-use poem::web::{Data, Path};
+use poem::web::{Data, Query};
 use poem::{Endpoint, EndpointExt, Route};
 use tokio::sync::mpsc;
 
@@ -29,7 +29,7 @@ struct State {
 #[poem::handler]
 async fn attrs_since(
     Data(state): Data<&State>,
-    Path(slot): Path<Slot>,
+    Query(slot): Query<Slot>,
     ws: WebSocket,
 ) -> impl poem::web::IntoResponse {
     ws.on_upgrade({
@@ -48,11 +48,12 @@ impl Lumio {
     pub fn new(cfg: Config) -> (Self, impl Endpoint + Send + Sync) {
         let Config { op_sol, op_move } = cfg;
         let (since_sender, since_receiver) = mpsc::channel(10);
-        let route = Route::new()
-            .at("/attrs/since/:slot", poem::get(attrs_since))
-            .with(poem::middleware::AddData::new(State {
-                since: since_sender,
-            }));
+        let route =
+            Route::new()
+                .at("/attrs", poem::get(attrs_since))
+                .with(poem::middleware::AddData::new(State {
+                    since: since_sender,
+                }));
         let me = Self {
             since: Arc::new(std::sync::Mutex::new(Some(since_receiver))),
             op_sol,

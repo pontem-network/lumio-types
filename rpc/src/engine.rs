@@ -7,7 +7,7 @@ use lumio_types::p2p::{PayloadStatus, SlotAttribute, SlotPayloadWithEvents};
 use lumio_types::Slot;
 use poem::http::StatusCode;
 use poem::web::websocket::WebSocket;
-use poem::web::{Data, Path};
+use poem::web::{Data, Query};
 use poem::{Endpoint, EndpointExt, Route};
 use tokio::sync::mpsc;
 
@@ -36,7 +36,7 @@ struct State {
 #[poem::handler]
 async fn events_since(
     Data(state): Data<&State>,
-    Path(slot): Path<Slot>,
+    Query(slot): Query<Slot>,
     ws: WebSocket,
 ) -> impl poem::web::IntoResponse {
     ws.on_upgrade({
@@ -54,7 +54,7 @@ async fn events_since(
 #[poem::handler]
 async fn engine_since(
     Data(state): Data<&State>,
-    Path(slot): Path<Slot>,
+    Query(slot): Query<Slot>,
     ws: WebSocket,
 ) -> impl poem::web::IntoResponse {
     ws.on_upgrade({
@@ -69,11 +69,16 @@ async fn engine_since(
     })
 }
 
+#[derive(serde::Deserialize)]
+pub(crate) struct Finalize {
+    pub slot: Slot,
+    pub status: PayloadStatus,
+}
+
 #[poem::handler]
 async fn finalize(
     Data(state): Data<&State>,
-    Path(slot): Path<Slot>,
-    Path(status): Path<PayloadStatus>,
+    Query(Finalize { slot, status }): Query<Finalize>,
 ) -> impl poem::web::IntoResponse {
     if state.finalize.send((slot, status)).await.is_err() {
         return (
@@ -95,9 +100,9 @@ impl Engine {
         let (engine_sender, engine_receiver) = tokio::sync::mpsc::channel(10);
         let (finalize_sender, finalize_receiver) = tokio::sync::mpsc::channel(10);
         let route = Route::new()
-            .at("/events/since/:slot", poem::get(events_since))
-            .at("/engine/since/:slot", poem::get(engine_since))
-            .at("/finalize/:slot/:status", poem::get(finalize))
+            .at("/events", poem::get(events_since))
+            .at("/engine", poem::get(engine_since))
+            .at("/finalize", poem::get(finalize))
             .with(poem::middleware::AddData::new(State {
                 engine: engine_sender,
                 events: events_sender,
