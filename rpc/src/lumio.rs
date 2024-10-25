@@ -12,9 +12,12 @@ use tokio::sync::mpsc;
 
 use crate::jwt::{JwtMiddleware, JwtSecret};
 
+#[serde_with::serde_as]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
     pub op_sol: url::Url,
     pub op_move: url::Url,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
     pub jwt: JwtSecret,
 }
 

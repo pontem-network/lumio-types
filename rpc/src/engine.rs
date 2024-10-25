@@ -9,13 +9,17 @@ use poem::http::StatusCode;
 use poem::web::websocket::WebSocket;
 use poem::web::{Data, Query};
 use poem::{Endpoint, EndpointExt, Route};
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::jwt::{JwtMiddleware, JwtSecret};
 
+#[serde_with::serde_as]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
     pub lumio: url::Url,
     pub other_engine: url::Url,
+    #[serde_as(as = "serde_with::DisplayFromStr")]
     pub jwt: JwtSecret,
 }
 
