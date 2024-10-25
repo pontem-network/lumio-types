@@ -91,14 +91,15 @@ impl Lumio {
         mut url: url::Url,
         slot: Slot,
         status: PayloadStatus,
-    ) -> reqwest::Result<()> {
+    ) -> Result<()> {
         url.set_path("/finalize");
         reqwest::Client::new()
             .get(url)
             .query(&crate::engine::Finalize { slot, status })
+            .header(reqwest::header::AUTHORIZATION, format!("Bearer {}", self.jwt.claim()?))
             .send()
-            .await
-            .map(drop)
+            .await?;
+        Ok(())
     }
 
     pub async fn op_sol_finalize(&self, slot: Slot, status: PayloadStatus) -> Result<()> {
