@@ -10,10 +10,15 @@ version.workspace = true
 bincode.workspace = true
 eyre.workspace = true
 futures.workspace = true
+hex.workspace = true
+jsonwebtoken.workspace = true
 poem = { workspace = true, features = ["websocket"] }
-serde.workspace = true
-tokio-stream.workspace = true
+poem-grants.workspace = true
+rand.workspace = true
 reqwest.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio-stream.workspace = true
 tokio-tungstenite.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true

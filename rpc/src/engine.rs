@@ -11,9 +11,12 @@ use poem::web::{Data, Query};
 use poem::{Endpoint, EndpointExt, Route};
 use tokio::sync::mpsc;
 
+use crate::jwt::{JwtMiddleware, JwtSecret};
+
 pub struct Config {
     pub lumio: url::Url,
     pub other_engine: url::Url,
+    pub jwt: JwtSecret,
 }
 
 #[derive(Clone)]
@@ -96,14 +99,15 @@ impl Engine {
         let Config {
             lumio,
             other_engine,
+            jwt,
         } = cfg;
         let (events_sender, events_receiver) = tokio::sync::mpsc::channel(10);
         let (engine_sender, engine_receiver) = tokio::sync::mpsc::channel(10);
         let (finalize_sender, finalize_receiver) = tokio::sync::mpsc::channel(10);
         let route = Route::new()
-            .at("/events", poem::get(events_since))
-            .at("/engine", poem::get(engine_since))
-            .at("/finalize", poem::get(finalize))
+            .at("/events", poem::get(events_since).with(JwtMiddleware(jwt)))
+            .at("/engine", poem::get(engine_since).with(JwtMiddleware(jwt)))
+            .at("/finalize", poem::get(finalize).with(JwtMiddleware(jwt)))
             .with(poem::middleware::AddData::new(State {
                 engine: engine_sender,
                 events: events_sender,

@@ -9,9 +9,12 @@ use poem::web::{Data, Query};
 use poem::{Endpoint, EndpointExt, Route};
 use tokio::sync::mpsc;
 
+use crate::jwt::{JwtMiddleware, JwtSecret};
+
 pub struct Config {
     pub op_sol: url::Url,
     pub op_move: url::Url,
+    pub jwt: JwtSecret,
 }
 
 #[derive(Clone)]
@@ -47,14 +50,17 @@ async fn attrs_since(
 
 impl Lumio {
     pub fn new(cfg: Config) -> (Self, impl Endpoint) {
-        let Config { op_sol, op_move } = cfg;
+        let Config {
+            op_sol,
+            op_move,
+            jwt,
+        } = cfg;
         let (since_sender, since_receiver) = mpsc::channel(10);
-        let route =
-            Route::new()
-                .at("/attrs", poem::get(attrs_since))
-                .with(poem::middleware::AddData::new(State {
-                    since: since_sender,
-                }));
+        let route = Route::new()
+            .at("/attrs", poem::get(attrs_since).with(JwtMiddleware(jwt)))
+            .with(poem::middleware::AddData::new(State {
+                since: since_sender,
+            }));
         let me = Self {
             since: Arc::new(std::sync::Mutex::new(Some(since_receiver))),
             op_sol,
