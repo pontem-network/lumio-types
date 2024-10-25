@@ -77,12 +77,31 @@ impl Lumio {
             .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
     }
 
+    async fn finalize(
+        &self,
+        mut url: url::Url,
+        slot: Slot,
+        status: PayloadStatus,
+    ) -> reqwest::Result<()> {
+        url.set_path("/finalize");
+        reqwest::Client::new()
+            .get(url)
+            .query(&crate::engine::Finalize { slot, status })
+            .send()
+            .await
+            .map(drop)
+    }
+
     pub async fn op_sol_finalize(&self, slot: Slot, status: PayloadStatus) -> Result<()> {
-        todo!()
+        self.finalize(self.op_sol.clone(), slot, status)
+            .await
+            .context("Failed to finalize op-sol")
     }
 
     pub async fn op_move_finalize(&self, slot: Slot, status: PayloadStatus) -> Result<()> {
-        todo!()
+        self.finalize(self.op_sol.clone(), slot, status)
+            .await
+            .context("Failed to finalize op-move")
     }
 
     pub async fn subscribe_op_move_events_since(

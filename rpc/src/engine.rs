@@ -69,7 +69,7 @@ async fn engine_since(
     })
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub(crate) struct Finalize {
     pub slot: Slot,
     pub status: PayloadStatus,
