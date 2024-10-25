@@ -15,6 +15,7 @@ pub struct Config {
 }
 
 #[derive(Clone)]
+#[allow(clippy::type_complexity)]
 pub struct Lumio {
     since: Arc<std::sync::Mutex<Option<mpsc::Receiver<(Slot, mpsc::Sender<SlotAttribute>)>>>>,
     op_sol: url::Url,
@@ -45,7 +46,7 @@ async fn attrs_since(
 }
 
 impl Lumio {
-    pub fn new(cfg: Config) -> (Self, impl Endpoint + Send + Sync) {
+    pub fn new(cfg: Config) -> (Self, impl Endpoint) {
         let Config { op_sol, op_move } = cfg;
         let (since_sender, since_receiver) = mpsc::channel(10);
         let route =

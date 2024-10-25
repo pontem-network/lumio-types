@@ -17,6 +17,7 @@ pub struct Config {
 }
 
 #[derive(Clone)]
+#[allow(clippy::type_complexity)]
 pub struct Engine {
     events:
         Arc<std::sync::Mutex<Option<mpsc::Receiver<(Slot, mpsc::Sender<SlotPayloadWithEvents>)>>>>,
@@ -91,7 +92,7 @@ async fn finalize(
 }
 
 impl Engine {
-    pub fn new(cfg: Config) -> (Self, impl Endpoint + Send + Sync) {
+    pub fn new(cfg: Config) -> (Self, impl Endpoint) {
         let Config {
             lumio,
             other_engine,
