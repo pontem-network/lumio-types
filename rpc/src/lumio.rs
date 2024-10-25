@@ -7,6 +7,7 @@ use lumio_types::Slot;
 use poem::web::websocket::WebSocket;
 use poem::web::{Data, Query};
 use poem::{Endpoint, EndpointExt, Route};
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::jwt::{JwtMiddleware, JwtSecret};
@@ -31,10 +32,15 @@ struct State {
     since: mpsc::Sender<(Slot, mpsc::Sender<SlotAttribute>)>,
 }
 
+#[derive(Serialize, Deserialize)]
+pub(crate) struct AttrsSince {
+    slot: Slot,
+}
+
 #[poem::handler]
 async fn attrs_since(
     Data(state): Data<&State>,
-    Query(slot): Query<Slot>,
+    Query(AttrsSince { slot }): Query<AttrsSince>,
     ws: WebSocket,
 ) -> impl poem::web::IntoResponse {
     ws.on_upgrade({
@@ -71,10 +77,16 @@ impl Lumio {
         (me, route)
     }
 
-    pub async fn handle_lumio_since(
+    pub async fn handle_attrs_since(
         &self,
     ) -> Result<
-        impl Stream<Item = (Slot, impl Sink<SlotAttribute> + Unpin + 'static)> + Unpin + 'static,
+        impl Stream<
+                Item = (
+                    Slot,
+                    impl Sink<SlotAttribute, Error = impl std::fmt::Debug> + Unpin + 'static,
+                ),
+            > + Unpin
+            + 'static,
     > {
         let receiver = self
             .since
@@ -86,17 +98,15 @@ impl Lumio {
             .map(|(slot, sender)| (slot, tokio_util::sync::PollSender::new(sender))))
     }
 
-    async fn finalize(
-        &self,
-        mut url: url::Url,
-        slot: Slot,
-        status: PayloadStatus,
-    ) -> Result<()> {
+    async fn finalize(&self, mut url: url::Url, slot: Slot, status: PayloadStatus) -> Result<()> {
         url.set_path("/finalize");
         reqwest::Client::new()
             .get(url)
             .query(&crate::engine::Finalize { slot, status })
-            .header(reqwest::header::AUTHORIZATION, format!("Bearer {}", self.jwt.claim()?))
+            .header(
+                reqwest::header::AUTHORIZATION,
+                format!("Bearer {}", self.jwt.claim()?),
+            )
             .send()
             .await?;
         Ok(())

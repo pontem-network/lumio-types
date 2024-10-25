@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(unused_crate_dependencies))]
+
 pub use engine::{Config as EngineConfig, Engine};
 pub use lumio::{Config as LumioConfig, Lumio};
 

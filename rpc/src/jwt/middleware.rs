@@ -22,7 +22,6 @@ impl<E: Endpoint> Endpoint for JwtMiddlewareImpl<E> {
     type Output = E::Output;
 
     async fn call(&self, req: Request) -> Result<Self::Output> {
-        // Just example. You have to make sure your middleware is correct
         if let Some(value) = req
             .headers()
             .get(AUTHORIZATION)

@@ -128,7 +128,13 @@ impl Engine {
     pub async fn handle_events_since(
         &self,
     ) -> Result<
-        impl Stream<Item = (Slot, impl Sink<SlotPayloadWithEvents> + Unpin + 'static)> + Unpin + 'static,
+        impl Stream<
+                Item = (
+                    Slot,
+                    impl Sink<SlotPayloadWithEvents, Error = impl std::fmt::Debug> + Unpin + 'static,
+                ),
+            > + Unpin
+            + 'static,
     > {
         let receiver = self
             .events
@@ -143,7 +149,13 @@ impl Engine {
     pub async fn handle_engine_since(
         &self,
     ) -> Result<
-        impl Stream<Item = (Slot, impl Sink<EngineActions> + Unpin + 'static)> + Unpin + 'static,
+        impl Stream<
+                Item = (
+                    Slot,
+                    impl Sink<EngineActions, Error = impl std::fmt::Debug> + Unpin + 'static,
+                ),
+            > + Unpin
+            + 'static,
     > {
         let receiver = self
             .engine
@@ -178,13 +190,13 @@ impl Engine {
             .context("Failed to subscribe to op-move events")
     }
 
-    pub async fn subscribe_lumio_events_since(
+    pub async fn subscribe_lumio_attrs_since(
         &self,
         since: Slot,
     ) -> Result<impl Stream<Item = Result<SlotAttribute>> + Unpin + 'static> {
         let mut url = self.lumio.clone();
-        url.set_path("/events");
-        url.set_query(Some(&since.to_string()));
+        url.set_path("/attrs");
+        url.set_query(Some(&format!("slot={since}")));
         crate::utils::ws_subscribe(url, self.jwt.claim()?)
             .await
             .context("Failed to subscribe to op-move events")

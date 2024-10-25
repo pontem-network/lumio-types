@@ -27,5 +27,15 @@ url.workspace = true
 
 lumio-types.workspace = true
 
+[dev-dependencies]
+portpicker.workspace = true
+tracing-subscriber = { workspace = true, features = [
+  "ansi",
+  "env-filter",
+  "fmt",
+  "tracing-log",
+] }
+tokio = { workspace = true, features = ["test-util", "macros"] }
+
 [lints]
 workspace = true
