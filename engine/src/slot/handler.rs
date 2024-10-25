@@ -106,7 +106,7 @@ mod tests {
     use super::*;
 
     fn empty(slot_id: u64) -> SlotAttribute {
-        SlotAttribute::new(slot_id, vec![], None)
+        SlotAttribute::new(slot_id, vec![])
     }
 
     fn with_events(slot_id: u64) -> SlotAttribute {
@@ -116,7 +116,6 @@ mod tests {
                 account: H256::default(),
                 amount: 2,
             })],
-            None,
         )
     }
 
