@@ -1,0 +1,13 @@
+[package]
+name = "lumio-rpc"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+poem = { workspace = true, features = ["websocket"] }
+
+[lints]
+workspace = true
