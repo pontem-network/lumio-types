@@ -11,6 +11,7 @@ bincode.workspace = true
 eyre.workspace = true
 futures.workspace = true
 poem = { workspace = true, features = ["websocket"] }
+serde.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
