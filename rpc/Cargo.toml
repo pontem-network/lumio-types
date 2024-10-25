@@ -13,8 +13,10 @@ futures.workspace = true
 poem = { workspace = true, features = ["websocket"] }
 serde.workspace = true
 tokio-stream.workspace = true
+tokio-tungstenite.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
+tungstenite.workspace = true
 url.workspace = true
 
 lumio-types.workspace = true

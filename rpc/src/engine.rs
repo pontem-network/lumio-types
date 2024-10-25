@@ -159,18 +159,27 @@ impl Engine {
             .context("Only 1 handler is supported")
     }
 
-    pub async fn subscribe_op_move_engine_since(
+    pub async fn subscribe_engine_since(
         &self,
-    ) -> Result<
-        impl Stream<Item = (Slot, impl Sink<SlotAttribute> + Unpin + 'static)> + Unpin + 'static,
-    > {
-        todo!()
+        since: Slot,
+    ) -> Result<impl Stream<Item = Result<EngineActions>> + Unpin + 'static> {
+        let mut url = self.other_engine.clone();
+        url.set_path("/engine");
+        url.set_query(Some(&since.to_string()));
+        crate::utils::ws_subscribe(url)
+            .await
+            .context("Failed to subscribe to op-move events")
     }
 
     pub async fn subscribe_lumio_events_since(
         &self,
         since: Slot,
-    ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
-        todo!()
+    ) -> Result<impl Stream<Item = Result<SlotAttribute>> + Unpin + 'static> {
+        let mut url = self.lumio.clone();
+        url.set_path("/events");
+        url.set_query(Some(&since.to_string()));
+        crate::utils::ws_subscribe(url)
+            .await
+            .context("Failed to subscribe to op-move events")
     }
 }

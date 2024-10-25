@@ -88,14 +88,24 @@ impl Lumio {
     pub async fn subscribe_op_move_events_since(
         &self,
         since: Slot,
-    ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
-        todo!()
+    ) -> Result<impl Stream<Item = Result<SlotPayloadWithEvents>> + Unpin + 'static> {
+        let mut url = self.op_move.clone();
+        url.set_path("/events");
+        url.set_query(Some(&since.to_string()));
+        crate::utils::ws_subscribe(url)
+            .await
+            .context("Failed to subscribe to op-move events")
     }
 
     pub async fn subscribe_op_sol_events_since(
         &self,
         since: Slot,
-    ) -> Result<impl Stream<Item = SlotPayloadWithEvents> + Unpin + 'static> {
-        todo!()
+    ) -> Result<impl Stream<Item = Result<SlotPayloadWithEvents>> + Unpin + 'static> {
+        let mut url = self.op_sol.clone();
+        url.set_path("/events");
+        url.set_query(Some(&since.to_string()));
+        crate::utils::ws_subscribe(url)
+            .await
+            .context("Failed to subscribe to op-sol events")
     }
 }
