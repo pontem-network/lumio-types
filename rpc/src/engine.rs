@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::jwt::{JwtMiddleware, JwtSecret};
+use crate::utils::DebugableSink;
 
 #[serde_with::serde_as]
 #[derive(Serialize, Deserialize, Debug)]
@@ -137,13 +138,7 @@ impl Engine {
     pub async fn handle_events_since(
         &self,
     ) -> Result<
-        impl Stream<
-                Item = (
-                    Slot,
-                    impl Sink<SlotPayloadWithEvents, Error = impl std::fmt::Debug> + Unpin + 'static,
-                ),
-            > + Unpin
-            + 'static,
+        impl Stream<Item = (Slot, impl DebugableSink<SlotPayloadWithEvents>)> + Unpin + 'static,
     > {
         let receiver = self
             .events
@@ -157,15 +152,8 @@ impl Engine {
 
     pub async fn handle_engine_since(
         &self,
-    ) -> Result<
-        impl Stream<
-                Item = (
-                    Slot,
-                    impl Sink<EngineActions, Error = impl std::fmt::Debug> + Unpin + 'static,
-                ),
-            > + Unpin
-            + 'static,
-    > {
+    ) -> Result<impl Stream<Item = (Slot, impl DebugableSink<EngineActions>)> + Unpin + 'static>
+    {
         let receiver = self
             .engine
             .lock()

@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::jwt::{JwtMiddleware, JwtSecret};
+use crate::utils::DebugableSink;
 
 #[serde_with::serde_as]
 #[derive(Serialize, Deserialize, Debug)]
@@ -82,15 +83,8 @@ impl Lumio {
 
     pub async fn handle_attrs_since(
         &self,
-    ) -> Result<
-        impl Stream<
-                Item = (
-                    Slot,
-                    impl Sink<SlotAttribute, Error = impl std::fmt::Debug> + Unpin + 'static,
-                ),
-            > + Unpin
-            + 'static,
-    > {
+    ) -> Result<impl Stream<Item = (Slot, impl DebugableSink<SlotAttribute>)> + Unpin + 'static>
+    {
         let receiver = self
             .since
             .lock()

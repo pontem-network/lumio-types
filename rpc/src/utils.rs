@@ -1,6 +1,15 @@
 use eyre::{Result, WrapErr};
 use futures::prelude::*;
 
+pub trait DebugableSink<I>: Sink<I, Error: std::fmt::Debug> + Unpin + 'static {}
+
+impl<I, S> DebugableSink<I> for S
+where
+    S: Sink<I> + Unpin + 'static,
+    S::Error: std::fmt::Debug,
+{
+}
+
 pub async fn feed_receiver_to_socket(
     mut socket: poem::web::websocket::WebSocketStream,
     mut receiver: tokio::sync::mpsc::Receiver<impl serde::Serialize>,
