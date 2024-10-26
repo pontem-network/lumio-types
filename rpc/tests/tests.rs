@@ -13,7 +13,7 @@ pub async fn start() -> (Lumio, Engine, Engine) {
     let (lumio, op_sol, op_move) = (new_port(), new_port(), new_port());
 
     let (sol, route) = Engine::new(EngineConfig {
-        lumio: format!("http://{lumio}").parse().unwrap(),
+        lumio: format!("http://{lumio}/engine/v1/").parse().unwrap(),
         other_engine: format!("http://{op_move}").parse().unwrap(),
         jwt,
     });
@@ -21,7 +21,7 @@ pub async fn start() -> (Lumio, Engine, Engine) {
     tokio::spawn(Server::new(TcpListener::bind(op_sol.to_string())).run(route.with(Tracing)));
 
     let (mv, route) = Engine::new(EngineConfig {
-        lumio: format!("http://{lumio}").parse().unwrap(),
+        lumio: format!("http://{lumio}/engine/v1/").parse().unwrap(),
         other_engine: format!("http://{op_sol}").parse().unwrap(),
         jwt,
     });
@@ -33,7 +33,10 @@ pub async fn start() -> (Lumio, Engine, Engine) {
         jwt,
     });
 
-    tokio::spawn(Server::new(TcpListener::bind(lumio.to_string())).run(route.with(Tracing)));
+    tokio::spawn(
+        Server::new(TcpListener::bind(lumio.to_string()))
+            .run(poem::Route::new().nest("/engine/v1/", route).with(Tracing)),
+    );
 
     // Wait to start listen
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;

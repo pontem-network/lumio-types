@@ -102,7 +102,10 @@ impl Lumio {
     }
 
     async fn finalize(&self, mut url: url::Url, slot: Slot, status: PayloadStatus) -> Result<()> {
-        url.set_path("/finalize");
+        url.path_segments_mut()
+            .map_err(|()| eyre::eyre!("Invalid url"))?
+            .pop_if_empty()
+            .push("finalize");
         reqwest::Client::new()
             .get(url)
             .query(&crate::engine::Finalize { slot, status })
@@ -131,23 +134,27 @@ impl Lumio {
         &self,
         since: Slot,
     ) -> Result<impl Stream<Item = Result<SlotPayloadWithEvents>> + Unpin + 'static> {
-        let mut url = self.op_move.clone();
-        url.set_path("/events");
-        url.set_query(Some(&since.to_string()));
-        crate::utils::ws_subscribe(url, self.jwt.claim()?)
-            .await
-            .context("Failed to subscribe to op-move events")
+        crate::utils::ws_subscribe(
+            self.op_move.clone(),
+            Some("events"),
+            Some(("slot", since.to_string())),
+            self.jwt.claim()?,
+        )
+        .await
+        .context("Failed to subscribe to op-move events")
     }
 
     pub async fn subscribe_op_sol_events_since(
         &self,
         since: Slot,
     ) -> Result<impl Stream<Item = Result<SlotPayloadWithEvents>> + Unpin + 'static> {
-        let mut url = self.op_sol.clone();
-        url.set_path("/events");
-        url.set_query(Some(&since.to_string()));
-        crate::utils::ws_subscribe(url, self.jwt.claim()?)
-            .await
-            .context("Failed to subscribe to op-sol events")
+        crate::utils::ws_subscribe(
+            self.op_sol.clone(),
+            Some("events"),
+            Some(("slot", since.to_string())),
+            self.jwt.claim()?,
+        )
+        .await
+        .context("Failed to subscribe to op-sol events")
     }
 }

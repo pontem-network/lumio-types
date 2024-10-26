@@ -42,10 +42,15 @@ struct State {
     finalize: mpsc::Sender<(Slot, PayloadStatus)>,
 }
 
+#[derive(Serialize, Deserialize)]
+pub(crate) struct SinceSlot {
+    slot: Slot,
+}
+
 #[poem::handler]
 async fn events_since(
     Data(state): Data<&State>,
-    Query(slot): Query<Slot>,
+    Query(SinceSlot { slot }): Query<SinceSlot>,
     ws: WebSocket,
 ) -> impl poem::web::IntoResponse {
     ws.on_upgrade({
@@ -63,7 +68,7 @@ async fn events_since(
 #[poem::handler]
 async fn engine_since(
     Data(state): Data<&State>,
-    Query(slot): Query<Slot>,
+    Query(SinceSlot { slot }): Query<SinceSlot>,
     ws: WebSocket,
 ) -> impl poem::web::IntoResponse {
     ws.on_upgrade({
@@ -186,23 +191,27 @@ impl Engine {
         &self,
         since: Slot,
     ) -> Result<impl Stream<Item = Result<EngineActions>> + Unpin + 'static> {
-        let mut url = self.other_engine.clone();
-        url.set_path("/engine");
-        url.set_query(Some(&since.to_string()));
-        crate::utils::ws_subscribe(url, self.jwt.claim()?)
-            .await
-            .context("Failed to subscribe to op-move events")
+        crate::utils::ws_subscribe(
+            self.other_engine.clone(),
+            Some("attrs"),
+            Some(("slot", since.to_string())),
+            self.jwt.claim()?,
+        )
+        .await
+        .context("Failed to subscribe to op-move events")
     }
 
     pub async fn subscribe_lumio_attrs_since(
         &self,
         since: Slot,
     ) -> Result<impl Stream<Item = Result<SlotAttribute>> + Unpin + 'static> {
-        let mut url = self.lumio.clone();
-        url.set_path("/attrs");
-        url.set_query(Some(&format!("slot={since}")));
-        crate::utils::ws_subscribe(url, self.jwt.claim()?)
-            .await
-            .context("Failed to subscribe to op-move events")
+        crate::utils::ws_subscribe(
+            self.lumio.clone(),
+            Some("attrs"),
+            Some(("slot", since.to_string())),
+            self.jwt.claim()?,
+        )
+        .await
+        .context("Failed to subscribe to lumio events")
     }
 }

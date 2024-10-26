@@ -17,8 +17,16 @@ pub async fn feed_receiver_to_socket(
 
 pub async fn ws_subscribe<T: serde::de::DeserializeOwned + 'static>(
     mut url: url::Url,
+    path: impl IntoIterator<Item = &str>,
+    queries: impl IntoIterator<Item = (&str, impl AsRef<str>)>,
     claims: String,
 ) -> Result<impl Stream<Item = Result<T>> + Unpin + 'static> {
+    url.path_segments_mut()
+        .map_err(|()| eyre::eyre!("Invalid url"))?
+        .pop_if_empty()
+        .extend(path);
+    url.query_pairs_mut().extend_pairs(queries);
+
     let req = tungstenite::handshake::client::Request::builder()
         .method("GET")
         .header(reqwest::header::AUTHORIZATION, format!("Bearer {claims}"))
