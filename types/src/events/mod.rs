@@ -5,7 +5,7 @@ use crate::Address;
 pub mod l1;
 pub mod l2;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Bridge {
     pub account: Address,
     pub amount: u64,

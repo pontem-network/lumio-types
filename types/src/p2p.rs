@@ -7,13 +7,13 @@ use serde_with::{
     formats::Unpadded,
 };
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SlotPayloadWithEvents {
     pub payload: SlotPayload,
     pub events: Vec<L2Event>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SlotAttribute {
     pub slot_id: Slot,
     pub events: Vec<L1Event>,
@@ -50,7 +50,7 @@ pub enum PayloadStatus {
 }
 
 #[serde_with::serde_as]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct SlotPayload {
     pub slot: Slot,
     pub previous_blockhash: Hash,

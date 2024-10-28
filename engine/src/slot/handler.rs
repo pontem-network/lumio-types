@@ -31,13 +31,7 @@ where
 
         let mut skip_range = SkipRange::new(self.current_slot, SLOTS_TO_SKIP);
         while let Some(payload) = self.receiver.next().await {
-            let payload = match payload {
-                Ok(payload) => payload,
-                Err(err) => {
-                    dbg!(&err);
-                    continue;
-                }
-            };
+            let payload = payload?;
 
             self.ensure_right_slot(payload.id())?;
 
@@ -139,7 +133,7 @@ mod tests {
     fn test_skip_range_try_skip_empty_payload() {
         let mut skip_range = SkipRange::new(10, 5);
         let payload = empty(11);
-        assert_eq!(skip_range.try_skip(payload.clone()), None);
+        assert_eq!(skip_range.try_skip(payload), None);
         assert_eq!(skip_range.skipped, 1);
     }
 
@@ -163,10 +157,10 @@ mod tests {
         let payload2 = empty(12);
         let payload3 = empty(13);
 
-        assert_eq!(skip_range.try_skip(payload1.clone()), None);
+        assert_eq!(skip_range.try_skip(payload1), None);
         assert_eq!(skip_range.skipped, 1);
 
-        assert_eq!(skip_range.try_skip(payload2.clone()), None);
+        assert_eq!(skip_range.try_skip(payload2), None);
         assert_eq!(skip_range.skipped, 2);
 
         let result = skip_range.try_skip(payload3.clone());

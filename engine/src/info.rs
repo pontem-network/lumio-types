@@ -2,7 +2,7 @@ use lumio_types::Hash;
 use lumio_types::{Slot, Version};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct L2Info {
     /// Hash of l2 genesis block. May be used to identify the chain. l1 <-> l2 bridge may use it to verify the chain.
     pub genesis_hash: Hash,
