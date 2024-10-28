@@ -2,10 +2,10 @@
 resolver = "2"
 
 members = [
-  "types",
-  "p2p",
-  "white-list",
   "engine",
+  "rpc",
+  "types",
+  "white-list",
 ]
 
 [workspace.package]
@@ -17,7 +17,7 @@ version = "0.1.0"
 
 [workspace.dependencies]
 lumio-engine = {path = "engine"}
-lumio-p2p = {path = "p2p"}
+lumio-rpc = {path = "rpc"}
 lumio-types = {path = "types"}
 
 arc-swap = "1.7.1"
@@ -32,6 +32,8 @@ jsonrpsee = {version = "0.24", features = ["server-core", "client-core", "macros
 jsonwebtoken = "9.3"
 libp2p = "0.54"
 log = "0.4.14"
+poem = "3.1.3"
+poem-grants = "3.0.1"
 portpicker = "0.1.1"
 rand = "0.8"
 reqwest = {version = "0.12.4", features = ["json"]}
@@ -43,9 +45,11 @@ strum = {version = "0.21", features = ["derive"]}
 thiserror = "1"
 tokio = "1.29.1"
 tokio-stream = "0.1.16"
+tokio-tungstenite = "0.24.0"
 tokio-util = "0.7.12"
 tracing = "0.1"
 tracing-subscriber = "0.3.1"
+tungstenite = "0.24.0"
 url = "2.5.2"
 
 [workspace.lints.rust]

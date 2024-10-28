@@ -1,5 +1,5 @@
 [package]
-name = "lumio-p2p"
+name = "lumio-rpc"
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
@@ -10,22 +10,21 @@ version.workspace = true
 bincode.workspace = true
 eyre.workspace = true
 futures.workspace = true
-libp2p = { workspace = true, features = [
-  "gossipsub",
-  "macros",
-  "noise",
-  "serde",
-  "tcp",
-  "pnet",
-  "tokio",
-  "yamux",
-] }
-tracing.workspace = true
+hex.workspace = true
+jsonwebtoken.workspace = true
+poem = { workspace = true, features = ["websocket"] }
+poem-grants.workspace = true
+rand.workspace = true
+reqwest.workspace = true
 serde.workspace = true
 serde_with.workspace = true
-tokio = { workspace = true, features = ["sync", "macros"] }
+thiserror.workspace = true
 tokio-stream.workspace = true
+tokio-tungstenite.workspace = true
 tokio-util.workspace = true
+tokio.workspace = true
+tungstenite.workspace = true
+url = { workspace = true, features = ["serde"] }
 
 lumio-types.workspace = true
 
@@ -38,7 +37,6 @@ tracing-subscriber = { workspace = true, features = [
   "tracing-log",
 ] }
 tokio = { workspace = true, features = ["test-util", "macros"] }
-rand.workspace = true
 
 [lints]
 workspace = true

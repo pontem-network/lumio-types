@@ -1,5 +1,5 @@
 use crate::ledger::Ledger;
-use eyre::Error;
+use eyre::{Error, Result};
 use futures::Stream;
 use futures::StreamExt;
 use lumio_types::{p2p::SlotAttribute, Slot};
@@ -16,7 +16,7 @@ pub struct SlotHandler<L, S> {
 impl<L, S> SlotHandler<L, S>
 where
     L: Ledger + Send + Sync + 'static,
-    S: Stream<Item = SlotAttribute> + Send + Sync + Unpin + 'static,
+    S: Stream<Item = Result<SlotAttribute>> + Send + Sync + Unpin + 'static,
 {
     pub fn new(ledger: Arc<L>, receiver: S) -> Self {
         Self {
@@ -31,6 +31,14 @@ where
 
         let mut skip_range = SkipRange::new(self.current_slot, SLOTS_TO_SKIP);
         while let Some(payload) = self.receiver.next().await {
+            let payload = match payload {
+                Ok(payload) => payload,
+                Err(err) => {
+                    dbg!(&err);
+                    continue;
+                }
+            };
+
             self.ensure_right_slot(payload.id())?;
 
             if let Some((from, payload)) = skip_range.try_skip(payload) {
@@ -106,7 +114,7 @@ mod tests {
     use super::*;
 
     fn empty(slot_id: u64) -> SlotAttribute {
-        SlotAttribute::new(slot_id, vec![], None)
+        SlotAttribute::new(slot_id, vec![])
     }
 
     fn with_events(slot_id: u64) -> SlotAttribute {
@@ -116,7 +124,6 @@ mod tests {
                 account: H256::default(),
                 amount: 2,
             })],
-            None,
         )
     }
 
