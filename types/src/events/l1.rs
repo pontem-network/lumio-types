@@ -5,13 +5,13 @@ use crate::h256::H256;
 
 use super::Bridge;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, IntoStaticStr)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, IntoStaticStr)]
 pub enum L1Event {
     Deposit(Bridge),
     Spl(SplL1Event),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, IntoStaticStr)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, IntoStaticStr)]
 pub enum SplL1Event {
     Bridge {
         l1_mint: H256,

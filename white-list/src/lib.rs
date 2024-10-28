@@ -58,7 +58,7 @@ impl WhiteListHolder {
         }
     }
 
-    pub async fn refresh_task(mut self) {
+    pub async fn refresh_task(self) {
         let mut interval = tokio::time::interval(self.refresh_rate);
         loop {
             interval.tick().await;
@@ -74,7 +74,7 @@ impl WhiteListHolder {
         }
     }
 
-    async fn fetch_accounts(&mut self) -> Result<HashSet<Address>, Error> {
+    async fn fetch_accounts(&self) -> Result<HashSet<Address>, Error> {
         self.http
             .get(self.url.clone())
             .send()
