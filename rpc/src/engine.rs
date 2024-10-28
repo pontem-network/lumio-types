@@ -16,7 +16,7 @@ use crate::jwt::{JwtMiddleware, JwtSecret};
 use crate::utils::DebugableSink;
 
 #[serde_with::serde_as]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub lumio: url::Url,
     pub other_engine: url::Url,

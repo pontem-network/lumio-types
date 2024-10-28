@@ -17,7 +17,7 @@ version = "0.1.0"
 
 [workspace.dependencies]
 lumio-engine = {path = "engine"}
-lumio-p2p = {path = "p2p"}
+lumio-rpc = {path = "rpc"}
 lumio-types = {path = "types"}
 
 arc-swap = "1.7.1"
