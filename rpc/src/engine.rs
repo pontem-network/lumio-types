@@ -54,7 +54,11 @@ async fn events_since(
     Query(SinceSlot { slot }): Query<SinceSlot>,
     ws: WebSocket,
 ) -> impl poem::web::IntoResponse {
-    ws.on_upgrade({
+    ws.config(poem::web::websocket::WebSocketConfig {
+        write_buffer_size: 0,
+        ..Default::default()
+    })
+    .on_upgrade({
         let handlers = state.events.clone();
         move |mut socket| async move {
             let (sender, mut receiver) = mpsc::channel(10);
