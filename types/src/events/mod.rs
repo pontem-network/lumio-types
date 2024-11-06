@@ -11,6 +11,13 @@ pub struct Bridge {
     pub amount: u64,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Message {
+    pub from: Address,
+    pub to: Address,
+    pub data: Vec<u8>,
+}
+
 #[cfg(test)]
 mod test {
     use rand::random;
