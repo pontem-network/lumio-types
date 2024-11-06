@@ -3,7 +3,7 @@ use strum::IntoStaticStr;
 
 use crate::{h256::H256, Slot};
 
-use super::Bridge;
+use super::{Bridge, Message};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, IntoStaticStr)]
 pub enum L2Event {
@@ -29,4 +29,5 @@ pub struct EngineActions {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, IntoStaticStr)]
 pub enum EngineAction {
     Transfer(Bridge),
+    SendMessage(Message),
 }
