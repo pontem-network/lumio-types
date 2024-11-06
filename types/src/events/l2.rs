@@ -22,7 +22,6 @@ pub enum SplL2Event {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EngineActions {
-    pub last_slot: Slot,
     pub slot: Slot,
     pub actions: Vec<EngineAction>,
 }
