@@ -30,7 +30,7 @@ where
     }
 
     pub async fn run(mut self) -> Result<(), Error> {
-        self.current_slot = self.ledger.get_committed_actions()?;
+        self.current_slot = self.ledger.get_committed_actions()? + 1;
 
         let mut skip_range = SkipRange::new(self.current_slot, SLOTS_TO_SKIP);
         while let Some(payload) = self.receiver.next().await {
