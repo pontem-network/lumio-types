@@ -27,7 +27,7 @@ where
     pub async fn run(mut self) -> Result<(), Error> {
         loop {
             let ledger = self.ledger.clone();
-            let slot = self.slot;
+            let slot = self.slot + 1;
             let actions =
                 tokio::task::spawn_blocking(move || ledger.get_slot_actions(slot)).await??;
             self.slot += actions.slot as u64 + 1;
