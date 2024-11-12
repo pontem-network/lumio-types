@@ -31,6 +31,8 @@ where
             let actions =
                 tokio::task::spawn_blocking(move || ledger.get_slot_actions(slot)).await??;
             self.slot += actions.slot as u64 + 1;
+            println!("actions slot send :{}", actions.slot);
+
             self.sender
                 .send(actions)
                 .await
