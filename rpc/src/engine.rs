@@ -181,7 +181,7 @@ impl Engine {
     ) -> Result<impl Stream<Item = Result<EngineActions>> + Unpin + 'static> {
         crate::utils::ws_subscribe(
             self.other_engine.clone(),
-            Some("attrs"),
+            Some("engine"),
             Some(("slot", since.to_string())),
             self.jwt.claim()?,
         )

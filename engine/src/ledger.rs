@@ -18,5 +18,9 @@ pub trait Ledger {
     /// Get the slot artifact by slot id. If the slot with slot_id skipped, return next slot.
     fn get_slot_actions(&self, slot_id: Slot) -> Result<EngineActions, Error>;
     /// Apply actions to the slot.
-    fn apply_slot_actions(&self, skip_from: Option<Slot>, actions: EngineActions) -> Result<(), Error>;
+    fn apply_slot_actions(
+        &self,
+        skip_from: Option<Slot>,
+        actions: EngineActions,
+    ) -> Result<(), Error>;
 }
