@@ -47,12 +47,12 @@ pub trait SlotExt {
     fn id(&self) -> Slot;
 }
 
-
 #[cfg(test)]
 mod tests {
     use lumio_types::{
         events::{l1::L1Event, Bridge},
-        h256::H256, p2p::SlotAttribute,
+        h256::H256,
+        p2p::SlotAttribute,
     };
 
     use super::*;

@@ -40,7 +40,8 @@ where
 
             if let Some((from, payload)) = skip_range.try_skip(payload) {
                 let ledger = self.ledger.clone();
-                tokio::task::spawn_blocking(move || ledger.apply_slot_actions(from, payload)).await??;
+                tokio::task::spawn_blocking(move || ledger.apply_slot_actions(from, payload))
+                    .await??;
             }
         }
         Ok(())
