@@ -34,7 +34,7 @@ where
             self.sender
                 .send(actions)
                 .await
-                .map_err(|_| eyre!("Failed to send slot payload"))?;
+                .map_err(|_| eyre!("Failed to send action payload"))?;
         }
     }
 }

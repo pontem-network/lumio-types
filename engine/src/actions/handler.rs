@@ -50,7 +50,7 @@ where
     fn ensure_right_slot(&mut self, slot: Slot) -> Result<(), Error> {
         if self.current_slot != slot {
             return Err(Error::msg(format!(
-                "SlotHandler: expected slot {}, got {}",
+                "ActionHandler: expected slot {}, got {}",
                 self.current_slot,
                 slot
             )));
