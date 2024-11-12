@@ -1,10 +1,10 @@
 use futures::prelude::*;
-use lumio_types::p2p::SlotAttribute;
+use lumio_types::{events::l2::EngineActions, p2p::SlotAttribute};
 
 #[tokio::test]
 async fn simple() {
     super::init();
-    let (lumio, sol, _mv) = super::start().await;
+    let (lumio, sol, mv) = super::start().await;
 
     let mut sol_final = sol.handle_finalize().await.unwrap();
     lumio.op_sol_finalize(10, Default::default()).await.unwrap();
@@ -20,4 +20,16 @@ async fn simple() {
     };
     lumio_attrs_sub.send(attrs.clone()).await.unwrap();
     assert_eq!(sol_attrs.next().await.unwrap().unwrap(), attrs);
+
+    let mut mv = mv.subscribe_engine_since(10).await.unwrap();
+    let mut op_move_env = sol.handle_engine_since().await.unwrap();
+    let (slot, mut sub) = op_move_env.next().await.unwrap();
+    assert_eq!(slot, 10);
+    let actions = EngineActions {
+        slot,
+        actions: vec![],
+    };
+    sub.send(actions.clone()).await.unwrap();
+
+    assert_eq!(mv.next().await.unwrap().unwrap(), actions);
 }
