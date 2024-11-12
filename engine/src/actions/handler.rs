@@ -48,14 +48,14 @@ where
     }
 
     fn ensure_right_slot(&mut self, slot: Slot) -> Result<(), Error> {
-        if self.current_slot + 1 != slot {
+        if self.current_slot != slot {
             return Err(Error::msg(format!(
                 "SlotHandler: expected slot {}, got {}",
-                self.current_slot + 1,
+                self.current_slot,
                 slot
             )));
         }
-        self.current_slot = slot;
+        self.current_slot = slot + 1;
         Ok(())
     }
 }
