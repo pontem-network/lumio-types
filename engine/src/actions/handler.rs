@@ -30,12 +30,12 @@ where
     }
 
     pub async fn run(mut self) -> Result<(), Error> {
-        self.current_slot = self.ledger.get_committed_actions()? + 1;
+        let committed_actions = self.ledger.get_committed_actions()?;
+        self.current_slot = committed_actions + 1;
 
-        let mut skip_range = SkipRange::new(self.current_slot, SLOTS_TO_SKIP);
+        let mut skip_range = SkipRange::new(committed_actions, SLOTS_TO_SKIP);
         while let Some(payload) = self.receiver.next().await {
             let payload = payload?;
-
             self.ensure_right_slot(payload.slot)?;
 
             if let Some((from, payload)) = skip_range.try_skip(payload) {
@@ -51,8 +51,7 @@ where
         if self.current_slot != slot {
             return Err(Error::msg(format!(
                 "ActionHandler: expected slot {}, got {}",
-                self.current_slot,
-                slot
+                self.current_slot, slot
             )));
         }
         self.current_slot = slot + 1;

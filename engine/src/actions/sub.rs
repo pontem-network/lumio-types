@@ -28,9 +28,11 @@ where
         loop {
             let ledger = self.ledger.clone();
             let slot = self.slot;
+
             let actions =
                 tokio::task::spawn_blocking(move || ledger.get_slot_actions(slot)).await??;
-            self.slot += actions.slot as u64 + 1;
+            self.slot = actions.slot as u64 + 1;
+
             self.sender
                 .send(actions)
                 .await
