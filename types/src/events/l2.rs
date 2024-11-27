@@ -30,4 +30,14 @@ pub struct EngineActions {
 pub enum EngineAction {
     Transfer(Bridge),
     SendMessage(Message),
+    Spl(SplAction)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, IntoStaticStr)]
+pub enum SplAction {
+    Transfer {
+        l1_mint: H256,
+        to: H256,
+        amount: u64,
+    },
 }
