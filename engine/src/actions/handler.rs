@@ -37,10 +37,10 @@ where
         let mut skip_range = SkipRange::new(committed_actions, SLOTS_TO_SKIP);
         while let Some(payload) = self.receiver.next().await {
             let payload = payload?;
-            let res = self.ensure_right_slot(payload.slot);
-            println!("payload:{:?}:{:?}", payload, res);
-            exit(1);
+            self.ensure_right_slot(payload.slot)?;
             if let Some((from, payload)) = skip_range.try_skip(payload) {
+                println!("ssss:{:?}{:?}",from, payload);
+                exit(1);
                 let ledger = self.ledger.clone();
                 tokio::task::spawn_blocking(move || ledger.apply_slot_actions(from, payload))
                     .await??;
