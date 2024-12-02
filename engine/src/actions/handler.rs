@@ -32,9 +32,10 @@ where
     pub async fn run(mut self) -> Result<(), Error> {
         let committed_actions = self.ledger.get_committed_actions()?;
         self.current_slot = committed_actions + 1;
-
+        
         let mut skip_range = SkipRange::new(committed_actions, SLOTS_TO_SKIP);
         while let Some(payload) = self.receiver.next().await {
+            panic!("ActionHandler: {:?}", payload);
             let payload = payload?;
             self.ensure_right_slot(payload.slot)?;
 
