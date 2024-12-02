@@ -39,8 +39,6 @@ where
             let payload = payload?;
             self.ensure_right_slot(payload.slot)?;
             if let Some((from, payload)) = skip_range.try_skip(payload) {
-                println!("ssss:{:?}{:?}",from, payload);
-                exit(1);
                 let ledger = self.ledger.clone();
                 tokio::task::spawn_blocking(move || ledger.apply_slot_actions(from, payload))
                     .await??;
