@@ -6,6 +6,7 @@ use futures::Stream;
 use futures::StreamExt;
 use lumio_types::events::l2::EngineActions;
 use lumio_types::Slot;
+use std::process::exit;
 use std::sync::Arc;
 
 pub const SLOTS_TO_SKIP: u64 = 5 * 60 * 1000 / 400;
@@ -36,7 +37,8 @@ where
         let mut skip_range = SkipRange::new(committed_actions, SLOTS_TO_SKIP);
         while let Some(payload) = self.receiver.next().await {
             let payload = payload?;
-            panic!("payload:{:?}", payload);
+            println!("payload:{:?}", payload);
+            exit(100);
             self.ensure_right_slot(payload.slot)?;
 
             if let Some((from, payload)) = skip_range.try_skip(payload) {
