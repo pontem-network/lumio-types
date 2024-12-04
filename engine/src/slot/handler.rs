@@ -34,8 +34,9 @@ where
         let mut skip_range = SkipRange::new(self.current_slot, SLOTS_TO_SKIP);
         while let Some(payload) = self.receiver.next().await {
             let payload = payload?;
-
+            println!("{:?}", payload);
             self.ensure_right_slot(payload.id())?;
+            println!("---  {:?}", payload);
 
             if let Some((from, payload)) = skip_range.try_skip(payload) {
                 let ledger = self.ledger.clone();
