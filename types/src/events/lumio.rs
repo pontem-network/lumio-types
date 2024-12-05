@@ -3,11 +3,11 @@ use strum::IntoStaticStr;
 
 use crate::h256::H256;
 
-use super::Bridge;
+use super::Transfer;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, IntoStaticStr)]
-pub enum L1Event {
-    Deposit(Bridge),
+pub enum LumioEvent {
+    Sol(Transfer),
     Spl(SplL1Event),
 }
 

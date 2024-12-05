@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use eyre::{ContextCompat, Result, WrapErr};
 use futures::prelude::*;
-use lumio_types::p2p::{PayloadStatus, SlotAttribute, SlotPayloadWithEvents};
+use lumio_types::p2p::{LumioEvents, PayloadStatus, SlotPayloadWithEvents};
 use lumio_types::Slot;
 use poem::web::websocket::WebSocket;
 use poem::web::{Data, Query};
@@ -25,7 +25,7 @@ pub struct Config {
 #[derive(Clone)]
 #[allow(clippy::type_complexity)]
 pub struct Lumio {
-    since: Arc<std::sync::Mutex<Option<mpsc::Receiver<(Slot, mpsc::Sender<SlotAttribute>)>>>>,
+    since: Arc<std::sync::Mutex<Option<mpsc::Receiver<(Slot, mpsc::Sender<LumioEvents>)>>>>,
     op_sol: url::Url,
     op_move: url::Url,
     jwt: JwtSecret,
@@ -33,7 +33,7 @@ pub struct Lumio {
 
 #[derive(Clone)]
 struct State {
-    since: mpsc::Sender<(Slot, mpsc::Sender<SlotAttribute>)>,
+    since: mpsc::Sender<(Slot, mpsc::Sender<LumioEvents>)>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -83,8 +83,7 @@ impl Lumio {
 
     pub async fn handle_attrs_since(
         &self,
-    ) -> Result<impl Stream<Item = (Slot, impl DebugableSink<SlotAttribute>)> + Unpin + 'static>
-    {
+    ) -> Result<impl Stream<Item = (Slot, impl DebugableSink<LumioEvents>)> + Unpin + 'static> {
         let receiver = self
             .since
             .lock()

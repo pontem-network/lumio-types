@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use eyre::{ContextCompat, Result, WrapErr};
 use futures::prelude::*;
-use lumio_types::events::l2::EngineActions;
-use lumio_types::p2p::{PayloadStatus, SlotAttribute, SlotPayloadWithEvents};
+use lumio_types::p2p::{EngineEvents, LumioEvents, PayloadStatus, SlotPayloadWithEvents};
 use lumio_types::Slot;
 use poem::http::StatusCode;
 use poem::web::websocket::WebSocket;
@@ -29,7 +28,7 @@ pub struct Config {
 pub struct Engine {
     events:
         Arc<std::sync::Mutex<Option<mpsc::Receiver<(Slot, mpsc::Sender<SlotPayloadWithEvents>)>>>>,
-    engine: Arc<std::sync::Mutex<Option<mpsc::Receiver<(Slot, mpsc::Sender<EngineActions>)>>>>,
+    engine: Arc<std::sync::Mutex<Option<mpsc::Receiver<(Slot, mpsc::Sender<EngineEvents>)>>>>,
     finalize: Arc<std::sync::Mutex<Option<mpsc::Receiver<(Slot, PayloadStatus)>>>>,
     lumio: url::Url,
     other_engine: url::Url,
@@ -39,7 +38,7 @@ pub struct Engine {
 #[derive(Clone)]
 struct State {
     events: mpsc::Sender<(Slot, mpsc::Sender<SlotPayloadWithEvents>)>,
-    engine: mpsc::Sender<(Slot, mpsc::Sender<EngineActions>)>,
+    engine: mpsc::Sender<(Slot, mpsc::Sender<EngineEvents>)>,
     finalize: mpsc::Sender<(Slot, PayloadStatus)>,
 }
 
@@ -152,7 +151,7 @@ impl Engine {
 
     pub async fn handle_engine_since(
         &self,
-    ) -> Result<impl Stream<Item = (Slot, impl DebugableSink<EngineActions>)> + Unpin + 'static>
+    ) -> Result<impl Stream<Item = (Slot, impl DebugableSink<EngineEvents>)> + Unpin + 'static>
     {
         let receiver = self
             .engine
@@ -178,7 +177,7 @@ impl Engine {
     pub async fn subscribe_engine_since(
         &self,
         since: Slot,
-    ) -> Result<impl Stream<Item = Result<EngineActions>> + Unpin + 'static> {
+    ) -> Result<impl Stream<Item = Result<EngineEvents>> + Unpin + 'static> {
         crate::utils::ws_subscribe(
             self.other_engine.clone(),
             Some("engine"),
@@ -192,7 +191,7 @@ impl Engine {
     pub async fn subscribe_lumio_attrs_since(
         &self,
         since: Slot,
-    ) -> Result<impl Stream<Item = Result<SlotAttribute>> + Unpin + 'static> {
+    ) -> Result<impl Stream<Item = Result<LumioEvents>> + Unpin + 'static> {
         crate::utils::ws_subscribe(
             self.lumio.clone(),
             Some("attrs"),

@@ -2,19 +2,19 @@ use crate::ledger::Ledger;
 use eyre::{eyre, Error};
 use futures::Sink;
 use futures::SinkExt;
-use lumio_types::{events::l2::EngineActions, Slot};
+use lumio_types::{p2p::SlotPayloadWithEvents, Slot};
 use std::sync::Arc;
 
-pub struct ActionPublisher<L, S> {
+pub struct SlotSub<L, S> {
     slot: Slot,
     ledger: Arc<L>,
     sender: S,
 }
 
-impl<L, S> ActionPublisher<L, S>
+impl<L, S> SlotSub<L, S>
 where
     L: Ledger + Send + Sync + 'static,
-    S: Sink<EngineActions> + Unpin + 'static,
+    S: Sink<SlotPayloadWithEvents> + Unpin + 'static,
 {
     pub fn new(slot: Slot, ledger: Arc<L>, sender: S) -> Self {
         Self {
@@ -28,15 +28,12 @@ where
         loop {
             let ledger = self.ledger.clone();
             let slot = self.slot;
-
-            let actions =
-                tokio::task::spawn_blocking(move || ledger.get_slot_actions(slot)).await??;
-            self.slot = actions.slot as u64 + 1;
-
+            let slot = tokio::task::spawn_blocking(move || ledger.get_payload(slot)).await??;
             self.sender
-                .send(actions)
+                .send(slot)
                 .await
-                .map_err(|_| eyre!("Failed to send action payload"))?;
+                .map_err(|_| eyre!("Failed to send slot payload"))?;
+            self.slot += 1;
         }
     }
 }

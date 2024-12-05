@@ -1,4 +1,5 @@
-use crate::events::{l1::L1Event, l2::L2Event};
+use crate::events::SlotEvents;
+use crate::events::{engine::EngineEvent, lumio::LumioEvent};
 use crate::{Hash, Slot, Transaction, UnixTimestamp};
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
@@ -7,30 +8,14 @@ use serde_with::{
     formats::Unpadded,
 };
 
+pub type LumioEvents = SlotEvents<LumioEvent>;
+
+pub type EngineEvents = SlotEvents<EngineEvent>;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SlotPayloadWithEvents {
     pub payload: SlotPayload,
-    pub events: Vec<L2Event>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SlotAttribute {
-    pub slot_id: Slot,
-    pub events: Vec<L1Event>,
-}
-
-impl SlotAttribute {
-    pub fn new(slot_id: Slot, events: Vec<L1Event>) -> Self {
-        Self { slot_id, events }
-    }
-
-    pub fn id(&self) -> Slot {
-        self.slot_id
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.events.is_empty()
-    }
+    pub events: EngineEvents,
 }
 
 // Copied from here: https://docs.optimism.io/builders/app-developers/transactions/statuses

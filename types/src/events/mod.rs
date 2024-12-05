@@ -1,37 +1,28 @@
 use serde::{Deserialize, Serialize};
 
-use crate::Address;
+use crate::{to::To, Address, Slot};
 
-pub mod l1;
-pub mod l2;
+pub mod engine;
+pub mod lumio;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Bridge {
+pub struct Transfer {
     pub account: Address,
     pub amount: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Message {
-    pub from: Address,
-    pub to: Address,
-    pub data: Vec<u8>,
+pub struct SlotEvents<Event> {
+    pub slot: Slot,
+    pub event: Vec<To<Event>>,
 }
 
-#[cfg(test)]
-mod test {
-    use rand::random;
+impl<Event> SlotEvents<Event> {
+    pub fn new(slot: Slot, event: Vec<To<Event>>) -> Self {
+        Self { slot, event }
+    }
 
-    use super::*;
-
-    #[test]
-    fn test_serde_tx_mint() {
-        let tx = super::Bridge {
-            account: Address::from(random::<[u8; 32]>()),
-            amount: 100,
-        };
-        let encoded_tx = serde_json::to_string(&tx).unwrap();
-        let decoded_tx: super::Bridge = serde_json::from_str(&encoded_tx).unwrap();
-        assert_eq!(tx, decoded_tx);
+    pub fn is_empty(&self) -> bool {
+        self.event.is_empty()
     }
 }
