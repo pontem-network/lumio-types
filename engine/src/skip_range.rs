@@ -1,4 +1,4 @@
-use lumio_types::Slot;
+use lumio_types::{events::SlotEvents, Slot};
 
 pub struct SkipRange {
     from: u64,
@@ -15,11 +15,14 @@ impl SkipRange {
         }
     }
 
-    pub fn try_skip<S: SlotExt>(&mut self, payload: S) -> Option<(Option<Slot>, S)> {
+    pub fn try_skip<Event>(
+        &mut self,
+        payload: SlotEvents<Event>,
+    ) -> Option<(Option<Slot>, SlotEvents<Event>)> {
         if payload.is_empty() {
             if self.skipped >= self.max_slots_to_skip {
                 let from = Some(self.from);
-                self.reset(payload.id());
+                self.reset(payload.slot);
                 Some((from, payload))
             } else {
                 self.skipped += 1;
@@ -31,7 +34,7 @@ impl SkipRange {
             } else {
                 Some(self.from)
             };
-            self.reset(payload.id());
+            self.reset(payload.slot);
             Some((from, payload))
         }
     }
@@ -42,32 +45,28 @@ impl SkipRange {
     }
 }
 
-pub trait SlotExt {
-    fn is_empty(&self) -> bool;
-    fn id(&self) -> Slot;
-}
-
 #[cfg(test)]
 mod tests {
     use lumio_types::{
-        events::{l1::L1Event, Bridge},
+        events::{lumio::LumioEvent, Transfer},
         h256::H256,
-        p2p::SlotAttribute,
+        p2p::LumioEvents,
+        to::To,
     };
 
     use super::*;
 
-    fn empty(slot_id: u64) -> SlotAttribute {
-        SlotAttribute::new(slot_id, vec![])
+    fn empty(slot_id: u64) -> LumioEvents {
+        LumioEvents::new(slot_id, vec![])
     }
 
-    fn with_events(slot_id: u64) -> SlotAttribute {
-        SlotAttribute::new(
+    fn with_events(slot_id: u64) -> LumioEvents {
+        LumioEvents::new(
             slot_id,
-            vec![L1Event::Deposit(Bridge {
+            vec![To::OpSol(LumioEvent::Sol(Transfer {
                 account: H256::default(),
                 amount: 2,
-            })],
+            }))],
         )
     }
 

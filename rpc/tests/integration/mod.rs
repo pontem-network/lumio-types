@@ -1,5 +1,5 @@
 use futures::prelude::*;
-use lumio_types::{events::l2::EngineActions, p2p::SlotAttribute};
+use lumio_types::p2p::{EngineEvents, LumioEvents};
 
 #[tokio::test]
 async fn simple() {
@@ -14,10 +14,8 @@ async fn simple() {
     let mut sol_attrs = sol.subscribe_lumio_attrs_since(10).await.unwrap();
     let (slot, mut lumio_attrs_sub) = lumio_attrs.next().await.unwrap();
     assert_eq!(slot, 10);
-    let attrs = SlotAttribute {
-        events: vec![],
-        slot_id: 11,
-    };
+    let attrs = LumioEvents::new(11, vec![]);
+
     lumio_attrs_sub.send(attrs.clone()).await.unwrap();
     assert_eq!(sol_attrs.next().await.unwrap().unwrap(), attrs);
 
@@ -25,10 +23,7 @@ async fn simple() {
     let mut op_move_env = sol.handle_engine_since().await.unwrap();
     let (slot, mut sub) = op_move_env.next().await.unwrap();
     assert_eq!(slot, 10);
-    let actions = EngineActions {
-        slot,
-        actions: vec![],
-    };
+    let actions = EngineEvents::new(slot, vec![]);
     sub.send(actions.clone()).await.unwrap();
 
     assert_eq!(mv.next().await.unwrap().unwrap(), actions);
