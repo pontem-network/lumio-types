@@ -65,7 +65,7 @@ pub async fn ws_subscribe<T: serde::de::DeserializeOwned + 'static>(
     Ok(stream.map(|res| res.context("WS error")).and_then(|msg| {
         futures::future::ready(match msg {
             tungstenite::protocol::Message::Binary(bin) => {
-                bincode::deserialize(&bin).context("Failed to deserialize message")
+                dbg!(bincode::deserialize(&bin).context("Failed to deserialize message"))
             }
             _ => Err(eyre::eyre!("Invalid message type")),
         })

@@ -51,7 +51,6 @@ where
         while let Some(payload) = self.receiver.next().await {
             let payload = payload?;
             println!("Received payload:{:?}", payload);
-            exit(-1);
             self.ensure_right_slot(payload.slot)?;
 
             if let Some((from, payload)) = skip_range.try_skip(payload) {
