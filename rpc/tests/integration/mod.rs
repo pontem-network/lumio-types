@@ -1,5 +1,7 @@
 use futures::prelude::*;
-use lumio_types::p2p::{EngineEvents, LumioEvents};
+use lumio_types::{
+    events::{lumio::LumioEvent, Transfer}, h256::H256, p2p::{EngineEvents, LumioEvents}, to::To
+};
 
 #[tokio::test]
 async fn simple() {
@@ -14,8 +16,13 @@ async fn simple() {
     let mut sol_attrs = sol.subscribe_lumio_attrs_since(10).await.unwrap();
     let (slot, mut lumio_attrs_sub) = lumio_attrs.next().await.unwrap();
     assert_eq!(slot, 10);
-    let attrs = LumioEvents::new(11, vec![]);
-
+     let attrs = LumioEvents::new(
+        11,
+        vec![To::Lumio(LumioEvent::Sol(Transfer {
+            account: H256::default(),
+            amount: 1313,
+        }))],
+    );
     lumio_attrs_sub.send(attrs.clone()).await.unwrap();
     assert_eq!(sol_attrs.next().await.unwrap().unwrap(), attrs);
 
