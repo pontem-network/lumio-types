@@ -14,15 +14,15 @@ pub struct Transfer {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SlotEvents<Event> {
     pub slot: Slot,
-    pub event: Vec<To<Event>>,
+    pub events: Vec<To<Event>>,
 }
 
 impl<Event> SlotEvents<Event> {
-    pub fn new(slot: Slot, event: Vec<To<Event>>) -> Self {
-        Self { slot, event }
+    pub fn new(slot: Slot, events: Vec<To<Event>>) -> Self {
+        Self { slot, events }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.event.is_empty()
+        self.events.is_empty()
     }
 }
