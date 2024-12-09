@@ -47,6 +47,8 @@ where
         let mut skip_range = SkipRange::new(committed, SLOTS_TO_SKIP);
 
         while let Some(payload) = self.receiver.next().await {
+            println!("Received payload:{:?}", payload);
+            exit(1);
             let payload = payload?;
             self.ensure_right_slot(payload.slot)?;
 
