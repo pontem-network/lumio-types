@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Deref};
 
 use serde::{Deserialize, Serialize};
 
@@ -12,6 +12,15 @@ pub enum To<T> {
 
 impl<T> To<T> {
     pub fn into_inner(self) -> T {
+        match self {
+            To::OpSol(inner) => inner,
+            To::OpMove(inner) => inner,
+            To::Lumio(inner) => inner,
+            To::Any(inner) => inner,
+        }
+    }
+
+    pub fn inner(&self) -> &T {
         match self {
             To::OpSol(inner) => inner,
             To::OpMove(inner) => inner,
@@ -39,5 +48,19 @@ impl<T> To<T> {
             To::Lumio(_) | To::OpSol(_) => None,
             To::OpMove(inner) | To::Any(inner) => Some(inner),
         }
+    }
+}
+
+impl<T> Deref for To<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner()
+    }
+}
+
+impl<T> AsRef<T> for To<T> {
+    fn as_ref(&self) -> &T {
+        self.inner()
     }
 }
