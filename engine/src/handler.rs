@@ -5,6 +5,7 @@ use futures::Stream;
 use futures::StreamExt;
 use lumio_types::events::SlotEvents;
 use lumio_types::Slot;
+use std::fmt::Debug;
 use std::sync::Arc;
 
 pub const SLOTS_TO_SKIP: u64 = 5 * 60 * 1000 / 400;
@@ -19,7 +20,7 @@ impl<L, S, Event> EventHandler<L, S>
 where
     L: ApplyAbstraction<Event> + Send + Sync + 'static,
     S: Stream<Item = Result<SlotEvents<Event>>> + Send + Sync + Unpin + 'static,
-    Event: Send + Sync + 'static,
+    Event: Debug + Send + Sync + 'static,
 {
     pub fn new(ledger: L, receiver: S) -> Self {
         Self {
@@ -48,6 +49,7 @@ where
 
         while let Some(payload) = self.receiver.next().await {
             let payload = payload?;
+            println!("handle slot :{:?}", payload);
             self.ensure_right_slot(payload.slot)?;
 
             if let Some((from, payload)) = skip_range.try_skip(payload) {
