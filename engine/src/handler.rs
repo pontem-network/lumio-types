@@ -45,6 +45,7 @@ where
         let committed = self.ledger.get_committed_slot()?;
 
         self.current_slot = committed + 1;
+        println!("Start event handler from:{}", committed);
         let mut skip_range = SkipRange::new(committed, SLOTS_TO_SKIP);
 
         while let Some(payload) = self.receiver.next().await {
