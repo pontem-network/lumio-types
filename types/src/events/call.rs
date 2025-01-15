@@ -11,20 +11,20 @@ pub enum Call {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MoveCall {
-    signer: Address,
-    module_address: Address,
-    module: String,
-    function: String,
-    tp_args: Vec<String>,
-    args: Vec<MoveValue>,
+    pub signer: Address,
+    pub module_address: Address,
+    pub module: String,
+    pub function: String,
+    pub tp_args: Vec<String>,
+    pub args: Vec<MoveValue>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SolanaCall {
-    signer: Address,
-    instruction: Vec<u8>,
-    on_fail: Option<Box<MoveCall>>,
-    os_success: Option<Box<MoveCall>>,
+    pub signer: Address,
+    pub instruction: Vec<u8>,
+    pub on_fail: Option<Box<MoveCall>>,
+    pub os_success: Option<Box<MoveCall>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
