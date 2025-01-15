@@ -1,7 +1,6 @@
-use primitive_types::U256;
 use serde::{Deserialize, Serialize};
 
-use crate::Address;
+use crate::{Address, U256};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Call {

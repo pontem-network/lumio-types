@@ -9,6 +9,8 @@ pub type Hash = h256::H256;
 pub type Slot = u64;
 pub type Version = u64;
 
+pub type U256 = [u64; 4];
+
 pub type UnixTimestamp = i64;
 
 pub type Transaction = Vec<u8>;
