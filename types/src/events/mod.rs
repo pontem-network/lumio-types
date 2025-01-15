@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{to::To, Address, Slot};
 
+pub mod call;
 pub mod engine;
 pub mod lumio;
 

@@ -3,11 +3,12 @@ edition.workspace = true
 name = "lumio-types"
 
 [dependencies]
-eyre.workspace = true
 borsh.workspace = true
 bs58.workspace = true
 derive_more.workspace = true
+eyre.workspace = true
 hex.workspace = true
+primitive-types = {workspace = true, features = ["impl-serde"]}
 serde.workspace = true
 serde_with.workspace = true
 strum.workspace = true

@@ -3,13 +3,14 @@ use strum::IntoStaticStr;
 
 use crate::{h256::H256, Address};
 
-use super::Transfer;
+use super::{call::Call, Transfer};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, IntoStaticStr)]
 pub enum EngineEvent {
     Sol(Transfer),
     Spl(SplEngineEvent),
     SendMessage(Message),
+    Call(Call),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, IntoStaticStr)]
