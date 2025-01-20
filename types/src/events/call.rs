@@ -16,7 +16,7 @@ pub struct MoveCall {
     pub function: String,
     pub tp_args: Vec<String>,
     pub args: Vec<MoveValue>,
-    pub attach_amount: u64,
+    pub attached_amount: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -25,7 +25,7 @@ pub struct SolanaCall {
     pub instruction: Vec<u8>,
     pub on_fail: Option<Box<MoveCall>>,
     pub os_success: Option<Box<MoveCall>>,
-    pub attach_amount: u64,
+    pub attached_amount: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
