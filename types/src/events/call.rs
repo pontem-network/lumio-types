@@ -23,8 +23,8 @@ pub struct MoveCall {
 pub struct SolanaCall {
     pub signer: Address,
     pub instruction: Vec<u8>,
-    pub on_fail: Option<Box<MoveCall>>,
-    pub os_success: Option<Box<MoveCall>>,
+    pub on_fail: Option<MoveCall>,
+    pub os_success: Option<MoveCall>,
     pub attached_amount: u64,
 }
 
