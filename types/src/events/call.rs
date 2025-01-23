@@ -22,10 +22,24 @@ pub struct MoveCall {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SolanaCall {
     pub signer: Address,
-    pub instruction: Vec<u8>,
+    pub instruction: CallInstruction,
     pub on_fail: Option<MoveCall>,
     pub os_success: Option<MoveCall>,
     pub attached_amount: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallInstruction {
+    pub program_id: Address,
+    pub data: Vec<u8>,
+    pub accounts: Vec<CallAccountMeta>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallAccountMeta {
+    pub is_signer: bool,
+    pub is_writable: bool,
+    pub pubkey: Address,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
