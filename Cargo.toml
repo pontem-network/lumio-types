@@ -2,10 +2,8 @@
 resolver = "2"
 
 members = [
-  "engine",
   "rpc",
   "types",
-  "white-list",
 ]
 
 [workspace.package]
@@ -16,7 +14,6 @@ repository = "https://github.com/pontem-network/lumio-types"
 version = "0.1.0"
 
 [workspace.dependencies]
-lumio-engine = {path = "engine"}
 lumio-rpc = {path = "rpc"}
 lumio-types = {path = "types"}
 
