@@ -1,5 +1,5 @@
-use crate::Address;
 use super::Hash;
+use crate::Address;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Payload {

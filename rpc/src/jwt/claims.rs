@@ -40,7 +40,7 @@ impl Claims {
 
 pub const JWT_SECRET_LENGTH: usize = 32;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct JwtSecret([u8; JWT_SECRET_LENGTH]);
 
 impl std::fmt::Display for JwtSecret {
@@ -93,5 +93,24 @@ impl JwtSecret {
             &jsonwebtoken::EncodingKey::from_secret(&self.0),
         )
         .map_err(Error::EncodeClaim)
+    }
+}
+
+impl Serialize for JwtSecret {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for JwtSecret {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
     }
 }
