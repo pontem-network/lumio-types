@@ -5,7 +5,7 @@ use crate::Address;
 pub struct Payload {
     pub last_l1_block: Hash,
     pub last_l1_block_number: u64,
-    pub parent_l2_block: Hash,
+    pub parent_l2_block_number: u64,
     pub l1_transactions: Vec<L1Transaction>,
 }
 

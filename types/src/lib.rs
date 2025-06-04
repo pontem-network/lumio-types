@@ -13,13 +13,12 @@ pub type BlockAccessSender = mpsc::Sender<BlockAccess>;
 pub type BlockAccessReceiver = mpsc::Receiver<BlockAccess>;
 
 pub enum BlockAccess {
-    GetBlock {
-        payload_id: Hash,
+    GetLatestBlock {
         response: oneshot::Sender<Result<block::Block, Error>>,
     },
-    GetNextBlock {
-        id: Hash,
-        response: oneshot::Sender<Result<Hash, Error>>,
+    GetBlock {
+        number: u64,
+        response: oneshot::Sender<Result<block::Block, Error>>,
     },
 }
 

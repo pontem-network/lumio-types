@@ -2,7 +2,7 @@ use super::Hash;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Block {
-    pub parent_l2_block: Hash,
+    pub parent_l2_block: u64,
     pub block: Hash,
     pub block_number: u64,
     pub timestamp: u64,
