@@ -2,9 +2,13 @@ use super::Hash;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Block {
-    pub parent_block: Hash,
-    pub block_number: Hash,
-    pub block: Vec<u8>,
+    pub parent_l2_block: Hash,
+    pub block: Hash,
+    pub block_number: u64,
+    pub timestamp: u64,
+    pub last_l1_block: Hash,
+    pub last_l1_block_number: u64,
+    pub block_data: Vec<u8>,
     pub l2_transactions: Vec<L2Transaction>,
 }
 

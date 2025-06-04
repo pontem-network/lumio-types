@@ -3,7 +3,9 @@ use crate::Address;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Payload {
-    pub parent_block: Hash,
+    pub last_l1_block: Hash,
+    pub last_l1_block_number: u64,
+    pub parent_l2_block: Hash,
     pub l1_transactions: Vec<L1Transaction>,
 }
 
