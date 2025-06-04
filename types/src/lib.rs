@@ -2,11 +2,13 @@ use eyre::Error;
 use payload::Payload;
 use tokio::sync::{mpsc, oneshot};
 
+pub mod address;
 pub mod block;
 pub mod h256;
 pub mod payload;
 
-pub type Address = h256::H256;
+pub use crate::address::EthAddress;
+pub type MoveAddress = h256::H256;
 pub type Hash = h256::H256;
 
 pub type BlockAccessSender = mpsc::Sender<BlockAccess>;

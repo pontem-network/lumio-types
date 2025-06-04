@@ -1,5 +1,5 @@
 use super::Hash;
-use crate::Address;
+use crate::{address::EthAddress, MoveAddress};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Payload {
@@ -13,15 +13,15 @@ pub struct Payload {
 pub enum L1Transaction {
     Deposit {
         /// The address to which the deposit is made.
-        to: Address,
+        to: MoveAddress,
         /// The amount of the deposit.
         value: u64,
         /// If the l1_token is not specified, it means that the native token is used.
-        l1_token: Option<Address>,
+        l1_token: Option<EthAddress>,
     },
     BindToken {
         /// The address to which the token is bound.
-        token_l1_address: Address,
+        token_l1_address: EthAddress,
         /// The decimals of the token.
         decimals: u8,
         /// The symbol of the token.

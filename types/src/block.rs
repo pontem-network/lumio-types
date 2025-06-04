@@ -1,3 +1,5 @@
+use crate::EthAddress;
+
 use super::Hash;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -16,10 +18,10 @@ pub struct Block {
 pub enum L2Transaction {
     Withdraw {
         /// The address to which the withdrawal is made.
-        to: super::Address,
+        to: EthAddress,
         /// The amount of the withdrawal.
         value: u64,
         /// If the l2_token is not specified, it means that the native token is used.
-        l2_token: Option<super::Address>,
+        l2_token: Option<EthAddress>,
     },
 }
