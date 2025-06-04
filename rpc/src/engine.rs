@@ -7,6 +7,7 @@ use poem::middleware::AddData;
 use poem::web::{Data, Json};
 use poem::{get, handler, web::Path, Route};
 use poem::{post, EndpointExt as _, Result, Server};
+use std::net::SocketAddr;
 use tokio::sync::oneshot;
 
 #[derive(Clone)]
@@ -17,7 +18,7 @@ struct State {
 
 pub async fn spawn(
     jwt: JwtSecret,
-    port: u16,
+    addr: SocketAddr,
     block_access: BlockAccessSender,
     payload_access: PayloadSender,
 ) {
@@ -33,10 +34,7 @@ pub async fn spawn(
         .with(JwtMiddleware(jwt))
         .with(AddData::new(state));
 
-    Server::new(TcpListener::bind(format!("0.0.0.0:{}", port)))
-        .run(app)
-        .await
-        .unwrap();
+    Server::new(TcpListener::bind(addr)).run(app).await.unwrap();
 }
 
 #[handler]
