@@ -21,7 +21,7 @@ pub enum L2Transaction {
         to: EthAddress,
         /// The amount of the withdrawal.
         value: u64,
-        /// If the l2_token is not specified, it means that the native token is used.
-        l2_token: Option<EthAddress>,
+        /// If the token_addr is not specified, it means that the native token is used.
+        token_addr: Option<EthAddress>,
     },
 }
