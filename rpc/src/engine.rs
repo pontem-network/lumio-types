@@ -71,7 +71,7 @@ async fn get_latest_block(state: Data<&State>) -> Result<Json<Block>> {
 }
 
 #[handler]
-async fn apply_payload(req: Json<Payload>, state: Data<&State>) -> Result<Json<Block>> {
+async fn apply_payload(req: Json<Payload>, state: Data<&State>) -> Result<Json<Option<Block>>> {
     let (tx, rx) = oneshot::channel();
     state
         .payload_access
@@ -82,8 +82,8 @@ async fn apply_payload(req: Json<Payload>, state: Data<&State>) -> Result<Json<B
         .await
         .map_err(|_| eyre::eyre!("Failed to send payload access request"))?;
 
-    let block_id = rx
+    let block = rx
         .await
         .map_err(|_| eyre::eyre!("Failed to receive block ID"))??;
-    Ok(Json(block_id))
+    Ok(Json(block))
 }
