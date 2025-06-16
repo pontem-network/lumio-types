@@ -71,7 +71,7 @@ async fn get_latest_block(state: Data<&State>) -> Result<Json<Block>> {
 }
 
 #[handler]
-async fn apply_payload(req: Json<Payload>, state: Data<&State>) -> Result<Json<Option<Block>>> {
+async fn apply_payload(req: Json<Payload>, state: Data<&State>) -> Result<Json<Vec<Block>>> {
     let (tx, rx) = oneshot::channel();
     state
         .payload_access

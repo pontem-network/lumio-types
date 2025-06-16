@@ -30,6 +30,6 @@ pub type PayloadReceiver = mpsc::Receiver<PayloadAccess>;
 pub enum PayloadAccess {
     ApplyPayload {
         payload: Payload,
-        response: oneshot::Sender<Result<Option<block::Block>, Error>>,
+        response: oneshot::Sender<Result<Vec<block::Block>, Error>>,
     },
 }
