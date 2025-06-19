@@ -18,6 +18,8 @@ pub enum L1Transaction {
         value: u64,
         /// If the l1_token is not specified, it means that the native token is used.
         l1_token: Option<EthAddress>,
+        /// The address of the sender of the deposit.
+        from: EthAddress,
     },
     BindToken {
         /// The address to which the token is bound.
