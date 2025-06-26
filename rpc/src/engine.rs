@@ -77,7 +77,7 @@ async fn get_block(Path(number): Path<u64>, state: Data<&State>) -> Result<Json<
 
     let block_result = rx.await.map_err(|_| eyre::eyre!("Failed to receive block"));
 
-    handle_result(block_result.map(|r| r.map(|block| vec![block])))
+    handle_result(block_result)
 }
 
 #[handler]
@@ -97,7 +97,7 @@ async fn get_latest_block(state: Data<&State>) -> Result<Json<Blocks>> {
     }
 
     let block_result = rx.await.map_err(|_| eyre::eyre!("Failed to receive block"));
-    handle_result(block_result.map(|r| r.map(|block| vec![block])))
+    handle_result(block_result)
 }
 
 #[handler]
