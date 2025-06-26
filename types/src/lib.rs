@@ -33,3 +33,10 @@ pub enum PayloadAccess {
         response: oneshot::Sender<Result<Vec<block::Block>, Error>>,
     },
 }
+
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Blocks {
+    pub blocks: Vec<block::Block>,
+    pub error: Option<String>,
+}

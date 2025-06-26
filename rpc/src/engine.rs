@@ -1,7 +1,7 @@
 use crate::jwt::{JwtMiddleware, JwtSecret};
 use lumio_types::block::Block;
 use lumio_types::payload::Payload;
-use lumio_types::{BlockAccess, BlockAccessSender, PayloadAccess, PayloadSender};
+use lumio_types::{BlockAccess, BlockAccessSender, Blocks, PayloadAccess, PayloadSender};
 use poem::listener::TcpListener;
 use poem::middleware::AddData;
 use poem::web::{Data, Json};
@@ -37,53 +37,89 @@ pub async fn spawn(
     Server::new(TcpListener::bind(addr)).run(app).await.unwrap();
 }
 
+fn handle_result(
+    result: Result<Result<Vec<Block>, eyre::Error>, eyre::Error>,
+) -> Result<Json<Blocks>> {
+    Ok(match result {
+        Ok(Ok(blocks)) => Json(Blocks {
+            blocks,
+            error: None,
+        }),
+        Ok(Err(e)) => Json(Blocks {
+            blocks: vec![],
+            error: Some(e.to_string()),
+        }),
+        Err(e) => Json(Blocks {
+            blocks: vec![],
+            error: Some(e.to_string()),
+        }),
+    })
+}
+
 #[handler]
-async fn get_block(Path(number): Path<u64>, state: Data<&State>) -> Result<Json<Block>> {
+async fn get_block(Path(number): Path<u64>, state: Data<&State>) -> Result<Json<Blocks>> {
     let (tx, rx) = oneshot::channel();
-    state
+    let result = state
         .block_access
         .send(BlockAccess::GetBlock {
             number,
             response: tx,
         })
         .await
-        .map_err(|_| eyre::eyre!("Failed to send block access request"))?;
+        .map_err(|_| eyre::eyre!("Failed to send block access request"));
 
-    let block = rx
-        .await
-        .map_err(|_| eyre::eyre!("Failed to receive block"))??;
-    Ok(Json(block))
+    if let Err(e) = result {
+        return Ok(Json(Blocks {
+            blocks: vec![],
+            error: Some(e.to_string()),
+        }));
+    }
+
+    let block_result = rx.await.map_err(|_| eyre::eyre!("Failed to receive block"));
+
+    handle_result(block_result.map(|r| r.map(|block| vec![block])))
 }
 
 #[handler]
-async fn get_latest_block(state: Data<&State>) -> Result<Json<Block>> {
+async fn get_latest_block(state: Data<&State>) -> Result<Json<Blocks>> {
     let (tx, rx) = oneshot::channel();
-    state
+    let result = state
         .block_access
         .send(BlockAccess::GetLatestBlock { response: tx })
         .await
-        .map_err(|_| eyre::eyre!("Failed to send block access request"))?;
+        .map_err(|_| eyre::eyre!("Failed to send block access request"));
 
-    let block = rx
-        .await
-        .map_err(|_| eyre::eyre!("Failed to receive block"))??;
-    Ok(Json(block))
+    if let Err(e) = result {
+        return Ok(Json(Blocks {
+            blocks: vec![],
+            error: Some(e.to_string()),
+        }));
+    }
+
+    let block_result = rx.await.map_err(|_| eyre::eyre!("Failed to receive block"));
+    handle_result(block_result.map(|r| r.map(|block| vec![block])))
 }
 
 #[handler]
-async fn apply_payload(req: Json<Payload>, state: Data<&State>) -> Result<Json<Vec<Block>>> {
+async fn apply_payload(req: Json<Payload>, state: Data<&State>) -> Result<Json<Blocks>> {
     let (tx, rx) = oneshot::channel();
-    state
+    let result = state
         .payload_access
         .send(PayloadAccess::ApplyPayload {
             payload: req.0,
             response: tx,
         })
         .await
-        .map_err(|_| eyre::eyre!("Failed to send payload access request"))?;
+        .map_err(|_| eyre::eyre!("Failed to send payload access request"));
+    if let Err(e) = result {
+        return Ok(Json(Blocks {
+            blocks: vec![],
+            error: Some(e.to_string()),
+        }));
+    }
 
-    let block = rx
+    let block_result = rx
         .await
-        .map_err(|_| eyre::eyre!("Failed to receive block ID"))??;
-    Ok(Json(block))
+        .map_err(|_| eyre::eyre!("Failed to receive block ID"));
+    handle_result(block_result)
 }
