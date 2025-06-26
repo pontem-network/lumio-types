@@ -16,11 +16,11 @@ pub type BlockAccessReceiver = mpsc::Receiver<BlockAccess>;
 
 pub enum BlockAccess {
     GetLatestBlock {
-        response: oneshot::Sender<Result<block::Block, Error>>,
+        response: oneshot::Sender<Result<Vec<block::Block>, Error>>,
     },
     GetBlock {
         number: u64,
-        response: oneshot::Sender<Result<block::Block, Error>>,
+        response: oneshot::Sender<Result<Vec<block::Block>, Error>>,
     },
 }
 
@@ -33,7 +33,6 @@ pub enum PayloadAccess {
         response: oneshot::Sender<Result<Vec<block::Block>, Error>>,
     },
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Blocks {
